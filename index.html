@@ -1,325 +1,486 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Hand Domain Effect ver 1.1</title>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Hand Domain Effect ver 1.2</title>
 
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
 
-  <style>
-    * { box-sizing: border-box; }
+<style>
+* { box-sizing: border-box; }
 
-    body {
-      margin: 0;
-      overflow: hidden;
-      background: #000;
-      font-family: Arial, sans-serif;
-    }
+body {
+  margin: 0;
+  overflow: hidden;
+  background: #000;
+  font-family: Arial, sans-serif;
+}
 
-    #wrap {
-      position: relative;
-      width: 100vw;
-      height: 100vh;
-      overflow: hidden;
-      background: black;
-    }
+#wrap {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background: black;
+}
 
-    video, canvas {
-      position: absolute;
-      inset: 0;
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-      transform: scaleX(-1);
-    }
+video, canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scaleX(-1);
+}
 
-    #version {
-      position: absolute;
-      top: 10px;
-      left: 12px;
-      z-index: 30;
-      color: white;
-      font-size: 12px;
-      opacity: 0.85;
-      user-select: none;
-    }
+#version {
+  position: absolute;
+  top: 10px;
+  left: 12px;
+  z-index: 30;
+  color: white;
+  font-size: 12px;
+  opacity: 0.9;
+}
 
-    #status {
-      position: absolute;
-      top: 32px;
-      left: 12px;
-      z-index: 30;
-      color: white;
-      font-size: 12px;
-      opacity: 0.75;
-      padding: 6px 10px;
-      border-radius: 999px;
-      background: rgba(0,0,0,0.35);
-    }
+#statusPanel {
+  position: absolute;
+  top: 32px;
+  left: 12px;
+  z-index: 30;
+  color: white;
+  font-size: 12px;
+}
 
-    #domainText {
-      position: absolute;
-      left: 50%;
-      top: 34%;
-      transform: translate(-50%, -50%);
-      z-index: 5;
-      color: rgba(255,255,255,0.9);
-      font-size: clamp(30px, 8vw, 92px);
-      font-weight: 900;
-      letter-spacing: -0.04em;
-      text-align: center;
-      white-space: nowrap;
-      opacity: 0;
-      text-shadow:
-        0 0 10px rgba(80,180,255,0.95),
-        0 0 25px rgba(50,140,255,0.8),
-        0 0 60px rgba(0,80,255,0.65);
-      transition: opacity 0.18s ease, transform 0.18s ease;
-      pointer-events: none;
-    }
+#status {
+  padding: 7px 11px;
+  border-radius: 999px;
+  background: rgba(0,0,0,0.4);
+  margin-bottom: 8px;
+}
 
-    #domainText.active {
-      opacity: 1;
-      transform: translate(-50%, -50%) scale(1.04);
-    }
+#playBtn {
+  border: 1px solid rgba(255,255,255,0.8);
+  background: rgba(255,255,255,0.14);
+  color: white;
+  border-radius: 999px;
+  padding: 8px 16px;
+  font-size: 13px;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+}
 
-    #flash {
-      position: absolute;
-      inset: 0;
-      z-index: 4;
-      background:
-        radial-gradient(circle at center, rgba(80,170,255,0.22), transparent 45%),
-        radial-gradient(circle at center, rgba(255,255,255,0.12), transparent 25%);
-      opacity: 0;
-      transition: opacity 0.2s ease;
-      pointer-events: none;
-    }
+#playBtn.on {
+  background: rgba(0,255,110,0.28);
+  border-color: rgba(0,255,120,0.9);
+}
 
-    #flash.active {
-      opacity: 1;
-      animation: pulse 1.4s infinite ease-in-out;
-    }
+#pitchBar {
+  position: absolute;
+  left: 24px;
+  top: 20%;
+  width: 8px;
+  height: 60%;
+  z-index: 25;
+  background: rgba(255,255,255,0.88);
+  border-radius: 999px;
+  box-shadow: 0 0 18px rgba(255,255,255,0.55);
+}
 
-    @keyframes pulse {
-      0%, 100% { transform: scale(1); opacity: 0.5; }
-      50% { transform: scale(1.08); opacity: 0.85; }
-    }
-  </style>
+#pitchDot {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 22px;
+  height: 22px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: white;
+  box-shadow: 0 0 18px rgba(0,255,120,0.9);
+}
+
+#domainText {
+  position: absolute;
+  left: 50%;
+  top: 34%;
+  transform: translate(-50%, -50%);
+  z-index: 5;
+  color: rgba(255,255,255,0.92);
+  font-size: clamp(30px, 8vw, 92px);
+  font-weight: 900;
+  white-space: nowrap;
+  opacity: 0;
+  text-shadow:
+    0 0 10px rgba(80,180,255,0.95),
+    0 0 25px rgba(50,140,255,0.8),
+    0 0 60px rgba(0,80,255,0.65);
+  transition: opacity 0.18s ease, transform 0.18s ease;
+  pointer-events: none;
+}
+
+#domainText.active {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1.04);
+}
+
+#flash {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  background:
+    radial-gradient(circle at center, rgba(80,170,255,0.22), transparent 45%),
+    radial-gradient(circle at center, rgba(255,255,255,0.12), transparent 25%);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
+}
+
+#flash.active {
+  opacity: 1;
+  animation: pulse 1.4s infinite ease-in-out;
+}
+
+@keyframes pulse {
+  0%, 100% { transform: scale(1); opacity: 0.5; }
+  50% { transform: scale(1.08); opacity: 0.85; }
+}
+</style>
 </head>
 
 <body>
-  <div id="wrap">
-    <video id="video" autoplay playsinline></video>
+<div id="wrap">
+  <video id="video" autoplay playsinline></video>
 
-    <div id="flash"></div>
-    <div id="domainText">영역전개: 무량공처</div>
+  <div id="flash"></div>
+  <div id="domainText">영역전개: 무량공처</div>
 
-    <canvas id="canvas"></canvas>
-
-    <div id="version">ver 1.1</div>
-    <div id="status">카메라 준비 중...</div>
+  <div id="pitchBar">
+    <div id="pitchDot"></div>
   </div>
 
-  <script>
-    const video = document.getElementById("video");
-    const canvas = document.getElementById("canvas");
-    const ctx = canvas.getContext("2d");
+  <canvas id="canvas"></canvas>
 
-    const statusBox = document.getElementById("status");
-    const domainText = document.getElementById("domainText");
-    const flash = document.getElementById("flash");
+  <div id="version">ver 1.2</div>
 
-    const fingertipIds = [4, 8, 12, 16, 20];
-    const baseJointIds = [1, 5, 9, 13, 17];
+  <div id="statusPanel">
+    <div id="status">손을 카메라에 비춰주세요</div>
+    <button id="playBtn">연주</button>
+  </div>
+</div>
 
-    let gestureHold = 0;
-    let gestureLost = 0;
+<script>
+const video = document.getElementById("video");
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
 
-    function resizeCanvas() {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
+const statusBox = document.getElementById("status");
+const domainText = document.getElementById("domainText");
+const flash = document.getElementById("flash");
+const playBtn = document.getElementById("playBtn");
+const pitchDot = document.getElementById("pitchDot");
+
+const fingertipIds = [4, 8, 12, 16, 20];
+const baseJointIds = [1, 5, 9, 13, 17];
+
+let gestureHold = 0;
+let gestureLost = 0;
+
+let audioCtx = null;
+let osc = null;
+let gain = null;
+let playMode = false;
+let currentFreq = 440;
+let shouldSound = false;
+
+function resizeCanvas() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+window.addEventListener("resize", resizeCanvas);
+resizeCanvas();
+
+function point(lm) {
+  return {
+    x: lm.x * canvas.width,
+    y: lm.y * canvas.height
+  };
+}
+
+function dist(a, b) {
+  const dx = a.x - b.x;
+  const dy = a.y - b.y;
+  return Math.sqrt(dx * dx + dy * dy);
+}
+
+function drawPoint(p, r = 7) {
+  ctx.beginPath();
+  ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+  ctx.fillStyle = "white";
+  ctx.fill();
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = "rgba(0,255,100,0.9)";
+  ctx.stroke();
+}
+
+function drawLine(a, b) {
+  ctx.beginPath();
+  ctx.moveTo(a.x, a.y);
+  ctx.lineTo(b.x, b.y);
+  ctx.lineWidth = 4;
+  ctx.lineCap = "round";
+  ctx.strokeStyle = "rgba(0,255,100,0.9)";
+  ctx.stroke();
+}
+
+function palmCenter(landmarks) {
+  const ids = [0, 5, 9, 13, 17];
+  let x = 0, y = 0;
+  ids.forEach(id => {
+    x += landmarks[id].x;
+    y += landmarks[id].y;
+  });
+  return {
+    x: (x / ids.length) * canvas.width,
+    y: (y / ids.length) * canvas.height
+  };
+}
+
+function drawHand(landmarks) {
+  const wrist = point(landmarks[0]);
+  const center = palmCenter(landmarks);
+
+  drawLine(wrist, center);
+
+  for (let i = 0; i < 5; i++) {
+    const base = point(landmarks[baseJointIds[i]]);
+    const tip = point(landmarks[fingertipIds[i]]);
+
+    drawLine(center, base);
+    drawLine(base, tip);
+
+    drawPoint(base, 6);
+    drawPoint(tip, 7);
+  }
+
+  drawPoint(wrist, 7);
+  drawPoint(center, 9);
+}
+
+function isFingerUp(landmarks, tipId, pipId) {
+  return landmarks[tipId].y < landmarks[pipId].y;
+}
+
+function detectDomainGesture(landmarks) {
+  const thumbTip = point(landmarks[4]);
+  const indexTip = point(landmarks[8]);
+  const middleTip = point(landmarks[12]);
+  const wrist = point(landmarks[0]);
+  const indexBase = point(landmarks[5]);
+
+  const handSize = Math.max(dist(wrist, indexBase), 1);
+
+  const indexUp = isFingerUp(landmarks, 8, 6);
+  const middleUp = isFingerUp(landmarks, 12, 10);
+  const ringDown = !isFingerUp(landmarks, 16, 14);
+  const pinkyDown = !isFingerUp(landmarks, 20, 18);
+
+  const indexMiddleClose = dist(indexTip, middleTip) < handSize * 1.65;
+  const thumbNearIndex = dist(thumbTip, indexTip) < handSize * 2.25;
+
+  const handNearCenter =
+    indexTip.x > canvas.width * 0.25 &&
+    indexTip.x < canvas.width * 0.75 &&
+    indexTip.y > canvas.height * 0.12 &&
+    indexTip.y < canvas.height * 0.75;
+
+  return indexUp && middleUp && ringDown && pinkyDown && indexMiddleClose && thumbNearIndex && handNearCenter;
+}
+
+function setDomainActive(active) {
+  domainText.classList.toggle("active", active);
+  flash.classList.toggle("active", active);
+}
+
+function initAudio() {
+  if (audioCtx) return;
+
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+  osc = audioCtx.createOscillator();
+  gain = audioCtx.createGain();
+
+  osc.type = "sine";
+  osc.frequency.value = currentFreq;
+
+  gain.gain.value = 0;
+
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+  osc.start();
+}
+
+function setSound(active) {
+  if (!audioCtx || !gain) return;
+
+  const now = audioCtx.currentTime;
+  const target = active ? 0.12 : 0;
+
+  gain.gain.cancelScheduledValues(now);
+  gain.gain.setTargetAtTime(target, now, 0.035);
+}
+
+function setFrequency(freq) {
+  currentFreq = freq;
+
+  if (osc && audioCtx) {
+    osc.frequency.setTargetAtTime(freq, audioCtx.currentTime, 0.04);
+  }
+}
+
+function yToFrequency(y) {
+  const minFreq = 180;
+  const maxFreq = 880;
+
+  const t = 1 - Math.min(Math.max(y / canvas.height, 0), 1);
+  return minFreq + (maxFreq - minFreq) * t;
+}
+
+function updatePitchBar(y) {
+  const barTopRatio = 0.2;
+  const barHeightRatio = 0.6;
+
+  const clamped = Math.min(Math.max(y / canvas.height, barTopRatio), barTopRatio + barHeightRatio);
+  const local = (clamped - barTopRatio) / barHeightRatio;
+
+  pitchDot.style.top = `${local * 100}%`;
+}
+
+function detectPinch(landmarks) {
+  const thumbTip = point(landmarks[4]);
+  const indexTip = point(landmarks[8]);
+  const wrist = point(landmarks[0]);
+  const indexBase = point(landmarks[5]);
+
+  const handSize = Math.max(dist(wrist, indexBase), 1);
+  return dist(thumbTip, indexTip) < handSize * 0.85;
+}
+
+function isLeftSideHand(landmarks) {
+  const wrist = point(landmarks[0]);
+  return wrist.x < canvas.width * 0.5;
+}
+
+function isRightSideHand(landmarks) {
+  const wrist = point(landmarks[0]);
+  return wrist.x >= canvas.width * 0.5;
+}
+
+playBtn.addEventListener("click", async () => {
+  initAudio();
+
+  if (audioCtx.state === "suspended") {
+    await audioCtx.resume();
+  }
+
+  playMode = !playMode;
+  playBtn.classList.toggle("on", playMode);
+  playBtn.textContent = playMode ? "연주 중" : "연주";
+
+  if (!playMode) {
+    setSound(false);
+  }
+});
+
+function onResults(results) {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  let domainDetected = false;
+  let leftIndexY = null;
+  let rightPinch = false;
+
+  const hands = results.multiHandLandmarks || [];
+
+  hands.forEach(hand => {
+    drawHand(hand);
+
+    if (detectDomainGesture(hand)) {
+      domainDetected = true;
     }
 
-    window.addEventListener("resize", resizeCanvas);
-    resizeCanvas();
-
-    function point(lm) {
-      return {
-        x: lm.x * canvas.width,
-        y: lm.y * canvas.height
-      };
+    if (isLeftSideHand(hand)) {
+      leftIndexY = point(hand[8]).y;
     }
 
-    function dist(a, b) {
-      const dx = a.x - b.x;
-      const dy = a.y - b.y;
-      return Math.sqrt(dx * dx + dy * dy);
+    if (isRightSideHand(hand) && detectPinch(hand)) {
+      rightPinch = true;
     }
+  });
 
-    function drawPoint(p, r = 7) {
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
-      ctx.fillStyle = "white";
-      ctx.fill();
+  if (leftIndexY !== null) {
+    const freq = yToFrequency(leftIndexY);
+    setFrequency(freq);
+    updatePitchBar(leftIndexY);
+  }
 
-      ctx.lineWidth = 2;
-      ctx.strokeStyle = "rgba(0,255,100,0.9)";
-      ctx.stroke();
-    }
+  shouldSound = playMode && leftIndexY !== null && rightPinch;
+  setSound(shouldSound);
 
-    function drawLine(a, b) {
-      ctx.beginPath();
-      ctx.moveTo(a.x, a.y);
-      ctx.lineTo(b.x, b.y);
-      ctx.lineWidth = 4;
-      ctx.lineCap = "round";
-      ctx.strokeStyle = "rgba(0,255,100,0.9)";
-      ctx.stroke();
-    }
+  if (domainDetected) {
+    gestureHold++;
+    gestureLost = 0;
+  } else {
+    gestureLost++;
+    if (gestureLost > 4) gestureHold = 0;
+  }
 
-    function palmCenter(landmarks) {
-      const ids = [0, 5, 9, 13, 17];
-      let x = 0, y = 0;
-      ids.forEach(id => {
-        x += landmarks[id].x;
-        y += landmarks[id].y;
-      });
-      return {
-        x: (x / ids.length) * canvas.width,
-        y: (y / ids.length) * canvas.height
-      };
-    }
+  const domainActive = gestureHold >= 3;
+  setDomainActive(domainActive);
 
-    function drawHand(landmarks) {
-      const wrist = point(landmarks[0]);
-      const center = palmCenter(landmarks);
+  if (hands.length === 0) {
+    statusBox.textContent = "손을 카메라에 비춰주세요";
+  } else if (shouldSound) {
+    statusBox.textContent = `연주 중 · 음높이 ${Math.round(currentFreq)}Hz`;
+  } else if (playMode) {
+    statusBox.textContent = "왼손 검지 높이 + 오른손 엄지/검지 터치";
+  } else if (domainActive) {
+    statusBox.textContent = "영역전개 감지됨";
+  } else {
+    statusBox.textContent = "손동작 인식 중";
+  }
+}
 
-      drawLine(wrist, center);
+const hands = new Hands({
+  locateFile: file => {
+    return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
+  }
+});
 
-      for (let i = 0; i < 5; i++) {
-        const base = point(landmarks[baseJointIds[i]]);
-        const tip = point(landmarks[fingertipIds[i]]);
+hands.setOptions({
+  maxNumHands: 2,
+  modelComplexity: 1,
+  minDetectionConfidence: 0.65,
+  minTrackingConfidence: 0.65
+});
 
-        drawLine(center, base);
-        drawLine(base, tip);
+hands.onResults(onResults);
 
-        drawPoint(base, 6);
-        drawPoint(tip, 7);
-      }
+const camera = new Camera(video, {
+  onFrame: async () => {
+    await hands.send({ image: video });
+  },
+  width: 1280,
+  height: 720
+});
 
-      drawPoint(wrist, 7);
-      drawPoint(center, 9);
-    }
-
-    function isFingerUp(landmarks, tipId, pipId) {
-      return landmarks[tipId].y < landmarks[pipId].y;
-    }
-
-    function detectDomainGesture(landmarks) {
-      const thumbTip = point(landmarks[4]);
-      const indexTip = point(landmarks[8]);
-      const middleTip = point(landmarks[12]);
-      const ringTip = point(landmarks[16]);
-      const pinkyTip = point(landmarks[20]);
-
-      const wrist = point(landmarks[0]);
-      const indexBase = point(landmarks[5]);
-      const handSize = Math.max(dist(wrist, indexBase), 1);
-
-      const indexUp = isFingerUp(landmarks, 8, 6);
-      const middleUp = isFingerUp(landmarks, 12, 10);
-      const ringDown = !isFingerUp(landmarks, 16, 14);
-      const pinkyDown = !isFingerUp(landmarks, 20, 18);
-
-      const indexMiddleClose = dist(indexTip, middleTip) < handSize * 1.65;
-      const thumbNearIndex = dist(thumbTip, indexTip) < handSize * 2.25;
-
-      const handNearCenter =
-        indexTip.x > canvas.width * 0.25 &&
-        indexTip.x < canvas.width * 0.75 &&
-        indexTip.y > canvas.height * 0.12 &&
-        indexTip.y < canvas.height * 0.75;
-
-      return (
-        indexUp &&
-        middleUp &&
-        ringDown &&
-        pinkyDown &&
-        indexMiddleClose &&
-        thumbNearIndex &&
-        handNearCenter
-      );
-    }
-
-    function setDomainActive(active) {
-      domainText.classList.toggle("active", active);
-      flash.classList.toggle("active", active);
-    }
-
-    function onResults(results) {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-      let detected = false;
-
-      if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-        results.multiHandLandmarks.forEach(hand => {
-          drawHand(hand);
-          if (detectDomainGesture(hand)) detected = true;
-        });
-      }
-
-      if (detected) {
-        gestureHold++;
-        gestureLost = 0;
-      } else {
-        gestureLost++;
-        if (gestureLost > 4) gestureHold = 0;
-      }
-
-      const active = gestureHold >= 3;
-      setDomainActive(active);
-
-      if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0) {
-        statusBox.textContent = "손을 카메라에 비춰주세요";
-      } else if (active) {
-        statusBox.textContent = "영역전개 감지됨";
-      } else {
-        statusBox.textContent = "손동작 인식 중";
-      }
-    }
-
-    const hands = new Hands({
-      locateFile: file => {
-        return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
-      }
-    });
-
-    hands.setOptions({
-      maxNumHands: 2,
-      modelComplexity: 1,
-      minDetectionConfidence: 0.65,
-      minTrackingConfidence: 0.65
-    });
-
-    hands.onResults(onResults);
-
-    const camera = new Camera(video, {
-      onFrame: async () => {
-        await hands.send({ image: video });
-      },
-      width: 1280,
-      height: 720
-    });
-
-    camera.start()
-      .then(() => {
-        statusBox.textContent = "카메라 실행 완료";
-      })
-      .catch(() => {
-        statusBox.textContent = "카메라 권한을 허용해 주세요";
-      });
-  </script>
+camera.start()
+  .then(() => {
+    statusBox.textContent = "손을 카메라에 비춰주세요";
+  })
+  .catch(() => {
+    statusBox.textContent = "카메라 권한을 허용해 주세요";
+  });
+</script>
 </body>
 </html>
