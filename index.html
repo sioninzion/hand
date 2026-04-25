@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>손 인식 랜드마크</title>
+  <title>Hand Domain Effect ver 1.1</title>
 
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
@@ -14,9 +14,8 @@
     body {
       margin: 0;
       overflow: hidden;
-      background: #050505;
+      background: #000;
       font-family: Arial, sans-serif;
-      color: white;
     }
 
     #wrap {
@@ -36,29 +35,76 @@
       transform: scaleX(-1);
     }
 
-    #status {
+    #version {
       position: absolute;
-      top: 16px;
-      left: 16px;
-      z-index: 10;
-      padding: 10px 14px;
-      border-radius: 999px;
-      background: rgba(0,0,0,0.55);
-      font-size: 14px;
-      backdrop-filter: blur(8px);
+      top: 10px;
+      left: 12px;
+      z-index: 30;
+      color: white;
+      font-size: 12px;
+      opacity: 0.85;
+      user-select: none;
     }
 
-    #title {
+    #status {
       position: absolute;
-      bottom: 18px;
-      left: 50%;
-      transform: translateX(-50%);
-      z-index: 10;
-      padding: 10px 16px;
+      top: 32px;
+      left: 12px;
+      z-index: 30;
+      color: white;
+      font-size: 12px;
+      opacity: 0.75;
+      padding: 6px 10px;
       border-radius: 999px;
-      background: rgba(0,0,0,0.5);
-      font-size: 14px;
-      color: #dfffe7;
+      background: rgba(0,0,0,0.35);
+    }
+
+    #domainText {
+      position: absolute;
+      left: 50%;
+      top: 34%;
+      transform: translate(-50%, -50%);
+      z-index: 5;
+      color: rgba(255,255,255,0.9);
+      font-size: clamp(30px, 8vw, 92px);
+      font-weight: 900;
+      letter-spacing: -0.04em;
+      text-align: center;
+      white-space: nowrap;
+      opacity: 0;
+      text-shadow:
+        0 0 10px rgba(80,180,255,0.95),
+        0 0 25px rgba(50,140,255,0.8),
+        0 0 60px rgba(0,80,255,0.65);
+      transition: opacity 0.18s ease, transform 0.18s ease;
+      pointer-events: none;
+    }
+
+    #domainText.active {
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1.04);
+    }
+
+    #flash {
+      position: absolute;
+      inset: 0;
+      z-index: 4;
+      background:
+        radial-gradient(circle at center, rgba(80,170,255,0.22), transparent 45%),
+        radial-gradient(circle at center, rgba(255,255,255,0.12), transparent 25%);
+      opacity: 0;
+      transition: opacity 0.2s ease;
+      pointer-events: none;
+    }
+
+    #flash.active {
+      opacity: 1;
+      animation: pulse 1.4s infinite ease-in-out;
+    }
+
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); opacity: 0.5; }
+      50% { transform: scale(1.08); opacity: 0.85; }
     }
   </style>
 </head>
@@ -66,21 +112,30 @@
 <body>
   <div id="wrap">
     <video id="video" autoplay playsinline></video>
+
+    <div id="flash"></div>
+    <div id="domainText">영역전개: 무량공처</div>
+
     <canvas id="canvas"></canvas>
 
+    <div id="version">ver 1.1</div>
     <div id="status">카메라 준비 중...</div>
-    <div id="title">손가락 끝 · 손바닥 마디 · 손바닥 중앙 · 손목 표시</div>
   </div>
 
   <script>
     const video = document.getElementById("video");
     const canvas = document.getElementById("canvas");
     const ctx = canvas.getContext("2d");
+
     const statusBox = document.getElementById("status");
+    const domainText = document.getElementById("domainText");
+    const flash = document.getElementById("flash");
 
     const fingertipIds = [4, 8, 12, 16, 20];
     const baseJointIds = [1, 5, 9, 13, 17];
-    const wristId = 0;
+
+    let gestureHold = 0;
+    let gestureLost = 0;
 
     function resizeCanvas() {
       canvas.width = window.innerWidth;
@@ -90,37 +145,27 @@
     window.addEventListener("resize", resizeCanvas);
     resizeCanvas();
 
-    function toCanvasPoint(landmark) {
+    function point(lm) {
       return {
-        x: landmark.x * canvas.width,
-        y: landmark.y * canvas.height
+        x: lm.x * canvas.width,
+        y: lm.y * canvas.height
       };
     }
 
-    function getPalmCenter(landmarks) {
-      const ids = [0, 5, 9, 13, 17];
-      let x = 0;
-      let y = 0;
-
-      ids.forEach(id => {
-        x += landmarks[id].x;
-        y += landmarks[id].y;
-      });
-
-      return {
-        x: (x / ids.length) * canvas.width,
-        y: (y / ids.length) * canvas.height
-      };
+    function dist(a, b) {
+      const dx = a.x - b.x;
+      const dy = a.y - b.y;
+      return Math.sqrt(dx * dx + dy * dy);
     }
 
-    function drawPoint(point, size = 7) {
+    function drawPoint(p, r = 7) {
       ctx.beginPath();
-      ctx.arc(point.x, point.y, size, 0, Math.PI * 2);
+      ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
       ctx.fillStyle = "white";
       ctx.fill();
 
       ctx.lineWidth = 2;
-      ctx.strokeStyle = "rgba(0, 255, 100, 0.9)";
+      ctx.strokeStyle = "rgba(0,255,100,0.9)";
       ctx.stroke();
     }
 
@@ -130,44 +175,119 @@
       ctx.lineTo(b.x, b.y);
       ctx.lineWidth = 4;
       ctx.lineCap = "round";
-      ctx.strokeStyle = "rgba(0, 255, 100, 0.9)";
+      ctx.strokeStyle = "rgba(0,255,100,0.9)";
       ctx.stroke();
     }
 
-    function drawHand(landmarks) {
-      const wrist = toCanvasPoint(landmarks[wristId]);
-      const palmCenter = getPalmCenter(landmarks);
+    function palmCenter(landmarks) {
+      const ids = [0, 5, 9, 13, 17];
+      let x = 0, y = 0;
+      ids.forEach(id => {
+        x += landmarks[id].x;
+        y += landmarks[id].y;
+      });
+      return {
+        x: (x / ids.length) * canvas.width,
+        y: (y / ids.length) * canvas.height
+      };
+    }
 
-      drawLine(wrist, palmCenter);
+    function drawHand(landmarks) {
+      const wrist = point(landmarks[0]);
+      const center = palmCenter(landmarks);
+
+      drawLine(wrist, center);
 
       for (let i = 0; i < 5; i++) {
-        const base = toCanvasPoint(landmarks[baseJointIds[i]]);
-        const tip = toCanvasPoint(landmarks[fingertipIds[i]]);
+        const base = point(landmarks[baseJointIds[i]]);
+        const tip = point(landmarks[fingertipIds[i]]);
 
-        drawLine(palmCenter, base);
+        drawLine(center, base);
         drawLine(base, tip);
 
-        drawPoint(base, 7);
+        drawPoint(base, 6);
         drawPoint(tip, 7);
       }
 
-      drawPoint(wrist, 8);
-      drawPoint(palmCenter, 9);
+      drawPoint(wrist, 7);
+      drawPoint(center, 9);
+    }
+
+    function isFingerUp(landmarks, tipId, pipId) {
+      return landmarks[tipId].y < landmarks[pipId].y;
+    }
+
+    function detectDomainGesture(landmarks) {
+      const thumbTip = point(landmarks[4]);
+      const indexTip = point(landmarks[8]);
+      const middleTip = point(landmarks[12]);
+      const ringTip = point(landmarks[16]);
+      const pinkyTip = point(landmarks[20]);
+
+      const wrist = point(landmarks[0]);
+      const indexBase = point(landmarks[5]);
+      const handSize = Math.max(dist(wrist, indexBase), 1);
+
+      const indexUp = isFingerUp(landmarks, 8, 6);
+      const middleUp = isFingerUp(landmarks, 12, 10);
+      const ringDown = !isFingerUp(landmarks, 16, 14);
+      const pinkyDown = !isFingerUp(landmarks, 20, 18);
+
+      const indexMiddleClose = dist(indexTip, middleTip) < handSize * 1.65;
+      const thumbNearIndex = dist(thumbTip, indexTip) < handSize * 2.25;
+
+      const handNearCenter =
+        indexTip.x > canvas.width * 0.25 &&
+        indexTip.x < canvas.width * 0.75 &&
+        indexTip.y > canvas.height * 0.12 &&
+        indexTip.y < canvas.height * 0.75;
+
+      return (
+        indexUp &&
+        middleUp &&
+        ringDown &&
+        pinkyDown &&
+        indexMiddleClose &&
+        thumbNearIndex &&
+        handNearCenter
+      );
+    }
+
+    function setDomainActive(active) {
+      domainText.classList.toggle("active", active);
+      flash.classList.toggle("active", active);
     }
 
     function onResults(results) {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0) {
-        statusBox.textContent = "손을 카메라에 비춰주세요";
-        return;
+      let detected = false;
+
+      if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+        results.multiHandLandmarks.forEach(hand => {
+          drawHand(hand);
+          if (detectDomainGesture(hand)) detected = true;
+        });
       }
 
-      statusBox.textContent = "손 인식 중";
+      if (detected) {
+        gestureHold++;
+        gestureLost = 0;
+      } else {
+        gestureLost++;
+        if (gestureLost > 4) gestureHold = 0;
+      }
 
-      results.multiHandLandmarks.forEach(handLandmarks => {
-        drawHand(handLandmarks);
-      });
+      const active = gestureHold >= 3;
+      setDomainActive(active);
+
+      if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0) {
+        statusBox.textContent = "손을 카메라에 비춰주세요";
+      } else if (active) {
+        statusBox.textContent = "영역전개 감지됨";
+      } else {
+        statusBox.textContent = "손동작 인식 중";
+      }
     }
 
     const hands = new Hands({
