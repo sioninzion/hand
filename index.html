@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Hand Sound ver 1.3</title>
+<title>Hand Sound ver 1.4</title>
 
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
@@ -112,61 +112,12 @@ video, canvas {
   border-radius: 999px;
   background: rgba(0,0,0,0.45);
 }
-
-#domainText {
-  position: absolute;
-  left: 50%;
-  top: 34%;
-  transform: translate(-50%, -50%);
-  z-index: 5;
-  color: rgba(255,255,255,0.92);
-  font-size: clamp(30px, 8vw, 92px);
-  font-weight: 900;
-  white-space: nowrap;
-  opacity: 0;
-  text-shadow:
-    0 0 10px rgba(80,180,255,0.95),
-    0 0 25px rgba(50,140,255,0.8),
-    0 0 60px rgba(0,80,255,0.65);
-  transition: opacity 0.18s ease, transform 0.18s ease;
-  pointer-events: none;
-}
-
-#domainText.active {
-  opacity: 1;
-  transform: translate(-50%, -50%) scale(1.04);
-}
-
-#flash {
-  position: absolute;
-  inset: 0;
-  z-index: 4;
-  background:
-    radial-gradient(circle at center, rgba(80,170,255,0.22), transparent 45%),
-    radial-gradient(circle at center, rgba(255,255,255,0.12), transparent 25%);
-  opacity: 0;
-  transition: opacity 0.2s ease;
-  pointer-events: none;
-}
-
-#flash.active {
-  opacity: 1;
-  animation: pulse 1.4s infinite ease-in-out;
-}
-
-@keyframes pulse {
-  0%, 100% { transform: scale(1); opacity: 0.5; }
-  50% { transform: scale(1.08); opacity: 0.85; }
-}
 </style>
 </head>
 
 <body>
 <div id="wrap">
   <video id="video" autoplay playsinline></video>
-
-  <div id="flash"></div>
-  <div id="domainText">영역전개: 무량공처</div>
 
   <div id="pitchBar">
     <div id="pitchDot"></div>
@@ -175,7 +126,7 @@ video, canvas {
 
   <canvas id="canvas"></canvas>
 
-  <div id="version">ver 1.3</div>
+  <div id="version">ver 1.4</div>
 
   <div id="statusPanel">
     <div id="status">손을 카메라에 비춰주세요</div>
@@ -189,17 +140,12 @@ const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
 
 const statusBox = document.getElementById("status");
-const domainText = document.getElementById("domainText");
-const flash = document.getElementById("flash");
 const playBtn = document.getElementById("playBtn");
 const pitchDot = document.getElementById("pitchDot");
 const octaveBox = document.getElementById("octaveBox");
 
 const fingertipIds = [4, 8, 12, 16, 20];
 const baseJointIds = [1, 5, 9, 13, 17];
-
-let gestureHold = 0;
-let gestureLost = 0;
 
 let audioCtx = null;
 let osc = null;
@@ -208,10 +154,8 @@ let playMode = false;
 let currentFreq = 440;
 let octaveLevel = 0;
 
-let leftSnapReady = true;
-let rightSnapReady = true;
-let lastLeftSnapTime = 0;
-let lastRightSnapTime = 0;
+let leftWave = createWaveDetector("left");
+let rightWave = createWaveDetector("right");
 
 function resizeCanvas() {
   canvas.width = window.innerWidth;
@@ -256,10 +200,12 @@ function drawLine(a, b) {
 function palmCenter(landmarks) {
   const ids = [0, 5, 9, 13, 17];
   let x = 0, y = 0;
+
   ids.forEach(id => {
     x += landmarks[id].x;
     y += landmarks[id].y;
   });
+
   return {
     x: (x / ids.length) * canvas.width,
     y: (y / ids.length) * canvas.height
@@ -287,38 +233,6 @@ function drawHand(landmarks) {
   drawPoint(center, 9);
 }
 
-function isFingerUp(landmarks, tipId, pipId) {
-  return landmarks[tipId].y < landmarks[pipId].y;
-}
-
-function detectDomainGesture(landmarks) {
-  const thumbTip = point(landmarks[4]);
-  const indexTip = point(landmarks[8]);
-  const middleTip = point(landmarks[12]);
-  const wrist = point(landmarks[0]);
-  const indexBase = point(landmarks[5]);
-  const handSize = Math.max(dist(wrist, indexBase), 1);
-
-  const indexUp = isFingerUp(landmarks, 8, 6);
-  const middleUp = isFingerUp(landmarks, 12, 10);
-  const ringDown = !isFingerUp(landmarks, 16, 14);
-  const pinkyDown = !isFingerUp(landmarks, 20, 18);
-
-  return (
-    indexUp &&
-    middleUp &&
-    ringDown &&
-    pinkyDown &&
-    dist(indexTip, middleTip) < handSize * 1.65 &&
-    dist(thumbTip, indexTip) < handSize * 2.25
-  );
-}
-
-function setDomainActive(active) {
-  domainText.classList.toggle("active", active);
-  flash.classList.toggle("active", active);
-}
-
 function initAudio() {
   if (audioCtx) return;
 
@@ -328,7 +242,6 @@ function initAudio() {
 
   osc.type = "sine";
   osc.frequency.value = currentFreq;
-
   gain.gain.value = 0;
 
   osc.connect(gain);
@@ -340,10 +253,8 @@ function setSound(active) {
   if (!audioCtx || !gain) return;
 
   const now = audioCtx.currentTime;
-  const target = active ? 0.12 : 0;
-
   gain.gain.cancelScheduledValues(now);
-  gain.gain.setTargetAtTime(target, now, 0.03);
+  gain.gain.setTargetAtTime(active ? 0.12 : 0, now, 0.03);
 }
 
 function setFrequency(freq) {
@@ -356,20 +267,16 @@ function setFrequency(freq) {
 function yToFrequency(y) {
   const minFreq = 180;
   const maxFreq = 880;
-
   const t = 1 - Math.min(Math.max(y / canvas.height, 0), 1);
   const baseFreq = minFreq + (maxFreq - minFreq) * t;
-
   return baseFreq * Math.pow(2, octaveLevel);
 }
 
 function updatePitchBar(y) {
   const top = 0.2;
   const height = 0.6;
-
   const clamped = Math.min(Math.max(y / canvas.height, top), top + height);
   const local = (clamped - top) / height;
-
   pitchDot.style.top = `${local * 100}%`;
 }
 
@@ -383,72 +290,76 @@ function detectStrictPinch(landmarks) {
   return dist(thumbTip, indexTip) < handSize * 0.42;
 }
 
-function detectSnapPose(landmarks) {
-  const thumbTip = point(landmarks[4]);
-  const middleTip = point(landmarks[12]);
-  const indexTip = point(landmarks[8]);
-  const wrist = point(landmarks[0]);
-  const middleBase = point(landmarks[9]);
-  const handSize = Math.max(dist(wrist, middleBase), 1);
-
-  const thumbMiddleClose = dist(thumbTip, middleTip) < handSize * 0.55;
-  const indexAway = dist(indexTip, thumbTip) > handSize * 0.65;
-
-  return thumbMiddleClose && indexAway;
-}
-
-function handleSnap(side, snapNow) {
-  const now = Date.now();
-
-  if (side === "left") {
-    if (!snapNow) {
-      leftSnapReady = true;
-      return;
-    }
-
-    if (snapNow && leftSnapReady && now - lastLeftSnapTime > 700) {
-      octaveLevel = Math.min(octaveLevel + 1, 2);
-      leftSnapReady = false;
-      lastLeftSnapTime = now;
-      updateOctaveText();
-    }
-  }
-
-  if (side === "right") {
-    if (!snapNow) {
-      rightSnapReady = true;
-      return;
-    }
-
-    if (snapNow && rightSnapReady && now - lastRightSnapTime > 700) {
-      octaveLevel = Math.max(octaveLevel - 1, -2);
-      rightSnapReady = false;
-      lastRightSnapTime = now;
-      updateOctaveText();
-    }
-  }
-}
-
-function updateOctaveText() {
-  const multi = Math.pow(2, octaveLevel);
-
-  if (octaveLevel === 0) {
-    octaveBox.textContent = "옥타브 x1";
-  } else if (octaveLevel > 0) {
-    octaveBox.textContent = `옥타브 x${multi}`;
-  } else {
-    octaveBox.textContent = `옥타브 x1/${Math.pow(2, Math.abs(octaveLevel))}`;
-  }
-}
-
 function isLeftSideHand(landmarks) {
-  const wrist = point(landmarks[0]);
-  return wrist.x < canvas.width * 0.5;
+  return point(landmarks[0]).x < canvas.width * 0.5;
 }
 
 function isRightSideHand(landmarks) {
-  const wrist = point(landmarks[0]);
-  return wrist.x >= canvas.width * 0.5;
+  return point(landmarks[0]).x >= canvas.width * 0.5;
+}
+
+function createWaveDetector(side) {
+  return {
+    side,
+    lastX: null,
+    lastDir: 0,
+    changes: 0,
+    lastChangeTime: 0,
+    cooldownUntil: 0
+  };
+}
+
+function updateWaveDetector(detector, x) {
+  const now = Date.now();
+
+  if (now < detector.cooldownUntil) return false;
+
+  if (detector.lastX === null) {
+    detector.lastX = x;
+    return false;
+  }
+
+  const dx = x - detector.lastX;
+  detector.lastX = x;
+
+  const threshold = canvas.width * 0.018;
+  if (Math.abs(dx) < threshold) return false;
+
+  const dir = dx > 0 ? 1 : -1;
+
+  if (detector.lastDir !== 0 && dir !== detector.lastDir) {
+    if (now - detector.lastChangeTime < 900) {
+      detector.changes++;
+    } else {
+      detector.changes = 1;
+    }
+
+    detector.lastChangeTime = now;
+
+    if (detector.changes >= 3) {
+      detector.changes = 0;
+      detector.cooldownUntil = now + 900;
+      return true;
+    }
+  }
+
+  detector.lastDir = dir;
+  return false;
+}
+
+function updateOctave(delta) {
+  octaveLevel = Math.max(-2, Math.min(2, octaveLevel + delta));
+  updateOctaveText();
+}
+
+function updateOctaveText() {
+  if (octaveLevel === 0) {
+    octaveBox.textContent = "옥타브 x1";
+  } else if (octaveLevel > 0) {
+    octaveBox.textContent = `옥타브 x${Math.pow(2, octaveLevel)}`;
+  } else {
+    octaveBox.textContent = `옥타브 x1/${Math.pow(2, Math.abs(octaveLevel))}`;
+  }
 }
 
 playBtn.addEventListener("click", async () => {
@@ -462,42 +373,41 @@ playBtn.addEventListener("click", async () => {
   playBtn.classList.toggle("on", playMode);
   playBtn.textContent = playMode ? "연주 중" : "연주";
 
-  if (!playMode) {
-    setSound(false);
-  }
+  if (!playMode) setSound(false);
 });
 
 function onResults(results) {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  let domainDetected = false;
   let leftIndexY = null;
   let rightPinch = false;
-  let leftSnap = false;
-  let rightSnap = false;
+  let octaveChanged = false;
 
   const handsList = results.multiHandLandmarks || [];
 
   handsList.forEach(hand => {
     drawHand(hand);
 
-    if (detectDomainGesture(hand)) {
-      domainDetected = true;
-    }
+    const wrist = point(hand[0]);
 
     if (isLeftSideHand(hand)) {
       leftIndexY = point(hand[8]).y;
-      leftSnap = detectSnapPose(hand);
+
+      if (updateWaveDetector(leftWave, wrist.x)) {
+        updateOctave(1);
+        octaveChanged = true;
+      }
     }
 
     if (isRightSideHand(hand)) {
       rightPinch = detectStrictPinch(hand);
-      rightSnap = detectSnapPose(hand);
+
+      if (updateWaveDetector(rightWave, wrist.x)) {
+        updateOctave(-1);
+        octaveChanged = true;
+      }
     }
   });
-
-  handleSnap("left", leftSnap);
-  handleSnap("right", rightSnap);
 
   if (leftIndexY !== null) {
     const freq = yToFrequency(leftIndexY);
@@ -508,25 +418,14 @@ function onResults(results) {
   const shouldSound = playMode && leftIndexY !== null && rightPinch;
   setSound(shouldSound);
 
-  if (domainDetected) {
-    gestureHold++;
-    gestureLost = 0;
-  } else {
-    gestureLost++;
-    if (gestureLost > 4) gestureHold = 0;
-  }
-
-  const domainActive = gestureHold >= 3;
-  setDomainActive(domainActive);
-
   if (handsList.length === 0) {
     statusBox.textContent = "손을 카메라에 비춰주세요";
+  } else if (octaveChanged) {
+    statusBox.textContent = "옥타브 변경됨";
   } else if (shouldSound) {
     statusBox.textContent = `연주 중 · ${Math.round(currentFreq)}Hz`;
   } else if (playMode) {
     statusBox.textContent = "오른손 엄지+검지를 완전히 붙이면 소리";
-  } else if (domainActive) {
-    statusBox.textContent = "영역전개 감지됨";
   } else {
     statusBox.textContent = "손동작 인식 중";
   }
