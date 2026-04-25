@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Hand Sound ver 1.6.1</title>
+<title>Hand Sound ver 1.6.2</title>
 
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
@@ -192,7 +192,7 @@ video, canvas {
 
   <canvas id="canvas"></canvas>
 
-  <div id="version">ver 1.6.1</div>
+  <div id="version">ver 1.6.2</div>
 
   <div id="statusPanel">
     <div id="status">손을 카메라에 비춰주세요</div>
@@ -278,6 +278,10 @@ function point(lm) {
   };
 }
 
+function screenX(landmarks) {
+  return canvas.width - point(landmarks[0]).x;
+}
+
 function dist(a, b) {
   const dx = a.x - b.x;
   const dy = a.y - b.y;
@@ -317,6 +321,12 @@ function palmCenter(landmarks) {
     x: (x / ids.length) * canvas.width,
     y: (y / ids.length) * canvas.height
   };
+}
+
+function handSize(landmarks) {
+  const wrist = point(landmarks[0]);
+  const middleBase = point(landmarks[9]);
+  return Math.max(dist(wrist, middleBase), 1);
 }
 
 function drawHand(landmarks) {
@@ -381,7 +391,7 @@ function setSound(active) {
 
   const now = audioCtx.currentTime;
   gain.gain.cancelScheduledValues(now);
-  gain.gain.setTargetAtTime(active ? 0.12 : 0, now, 0.03);
+  gain.gain.setTargetAtTime(active ? 0.22 : 0, now, 0.03);
 }
 
 function setFrequency(freq) {
@@ -412,31 +422,33 @@ function detectStrictPinch(landmarks) {
   const indexTip = point(landmarks[8]);
   const wrist = point(landmarks[0]);
   const indexBase = point(landmarks[5]);
-  const handSize = Math.max(dist(wrist, indexBase), 1);
+  const handSizeValue = Math.max(dist(wrist, indexBase), 1);
 
-  return dist(thumbTip, indexTip) < handSize * 0.42;
+  return dist(thumbTip, indexTip) < handSizeValue * 0.42;
 }
 
 function isLeftSideHand(landmarks) {
-  return point(landmarks[0]).x < canvas.width * 0.5;
+  return screenX(landmarks) < canvas.width * 0.5;
 }
 
 function isRightSideHand(landmarks) {
-  return point(landmarks[0]).x >= canvas.width * 0.5;
+  return screenX(landmarks) >= canvas.width * 0.5;
 }
 
 function detectClap(hand1, hand2) {
   const c1 = palmCenter(hand1);
   const c2 = palmCenter(hand2);
-  const d = dist(c1, c2);
 
-  return d < canvas.width * 0.18;
+  const avgSize = (handSize(hand1) + handSize(hand2)) / 2;
+  const palmDistance = dist(c1, c2);
+
+  return palmDistance < avgSize * 1.05;
 }
 
 function getClapSide(hand1, hand2) {
-  const c1 = palmCenter(hand1);
-  const c2 = palmCenter(hand2);
-  const x = (c1.x + c2.x) / 2;
+  const x1 = screenX(hand1);
+  const x2 = screenX(hand2);
+  const x = (x1 + x2) / 2;
 
   return x < canvas.width * 0.5 ? "left" : "right";
 }
@@ -512,7 +524,7 @@ function onResults(results) {
         (c1.y + c2.y) / 2
       );
 
-      clapCooldown = now + 800;
+      clapCooldown = now + 900;
       octaveChanged = true;
     }
   }
@@ -539,7 +551,7 @@ function onResults(results) {
   } else if (shouldSound) {
     statusBox.textContent = `연주 중 · ${currentNoteName}`;
   } else if (playMode) {
-    statusBox.textContent = "오른손 엄지+검지를 완전히 붙이면 소리";
+    statusBox.textContent = "오른쪽 손 엄지+검지를 완전히 붙이면 소리";
   } else {
     statusBox.textContent = "손동작 인식 중";
   }
