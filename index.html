@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Hand Sound ver 1.4</title>
+<title>Hand Sound ver 1.6.1</title>
 
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
@@ -79,30 +79,51 @@ video, canvas {
 #pitchBar {
   position: absolute;
   right: 24px;
-  top: 20%;
-  width: 8px;
-  height: 60%;
+  top: 10%;
+  width: 20px;
+  height: 80%;
   z-index: 25;
-  background: rgba(255,255,255,0.88);
   border-radius: 999px;
-  box-shadow: 0 0 18px rgba(255,255,255,0.55);
+  overflow: hidden;
+  border: 1.5px solid rgba(255,255,255,0.95);
+  box-shadow: 0 0 16px rgba(255,255,255,0.45);
+  background: white;
 }
 
-#pitchDot {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 22px;
-  height: 22px;
-  transform: translate(-50%, -50%);
-  border-radius: 50%;
-  background: white;
-  box-shadow: 0 0 18px rgba(0,255,120,0.9);
+.noteCell {
+  height: calc(100% / 23);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 6px;
+  font-weight: bold;
+  line-height: 1;
+  border-bottom: 1px solid rgba(90,90,90,0.45);
+}
+
+.noteCell.white {
+  background: #fff;
+  color: #111;
+}
+
+.noteCell.black {
+  background: #050505;
+  color: #fff;
+}
+
+.noteCell.active {
+  background: #ff2626 !important;
+  color: white !important;
+  box-shadow:
+    inset 0 0 10px rgba(255,255,255,0.95),
+    inset 0 0 18px rgba(255,0,0,0.95),
+    0 0 18px rgba(255,0,0,0.95);
+  text-shadow: 0 0 6px rgba(255,255,255,0.9);
 }
 
 #octaveBox {
   position: absolute;
-  right: 45px;
+  right: 50px;
   top: 50%;
   transform: translateY(-50%);
   z-index: 30;
@@ -112,6 +133,52 @@ video, canvas {
   border-radius: 999px;
   background: rgba(0,0,0,0.45);
 }
+
+#noteBox {
+  position: absolute;
+  right: 50px;
+  top: calc(50% - 42px);
+  z-index: 30;
+  color: white;
+  font-size: 13px;
+  font-weight: bold;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(255,0,0,0.5);
+  text-shadow: 0 0 8px rgba(255,255,255,0.7);
+}
+
+@media (orientation: landscape) and (max-width: 900px) {
+  #pitchBar {
+    right: 14px;
+    top: 7%;
+    height: 86%;
+    width: 20px;
+  }
+
+  #octaveBox {
+    right: 42px;
+    font-size: 12px;
+    padding: 5px 9px;
+  }
+
+  #noteBox {
+    right: 42px;
+    top: calc(50% - 40px);
+    font-size: 12px;
+    padding: 5px 9px;
+  }
+
+  #statusPanel {
+    top: 30px;
+    left: 10px;
+  }
+
+  #playBtn {
+    padding: 9px 18px;
+    font-size: 14px;
+  }
+}
 </style>
 </head>
 
@@ -119,18 +186,17 @@ video, canvas {
 <div id="wrap">
   <video id="video" autoplay playsinline></video>
 
-  <div id="pitchBar">
-    <div id="pitchDot"></div>
-  </div>
+  <div id="pitchBar"></div>
+  <div id="noteBox">-</div>
   <div id="octaveBox">옥타브 x1</div>
 
   <canvas id="canvas"></canvas>
 
-  <div id="version">ver 1.4</div>
+  <div id="version">ver 1.6.1</div>
 
   <div id="statusPanel">
     <div id="status">손을 카메라에 비춰주세요</div>
-    <button id="playBtn">연주</button>
+    <button id="playBtn">손타마톤</button>
   </div>
 </div>
 
@@ -141,11 +207,38 @@ const ctx = canvas.getContext("2d");
 
 const statusBox = document.getElementById("status");
 const playBtn = document.getElementById("playBtn");
-const pitchDot = document.getElementById("pitchDot");
+const pitchBar = document.getElementById("pitchBar");
 const octaveBox = document.getElementById("octaveBox");
+const noteBox = document.getElementById("noteBox");
 
 const fingertipIds = [4, 8, 12, 16, 20];
 const baseJointIds = [1, 5, 9, 13, 17];
+
+const scaleNotes = [
+  { name: "파", freq: 698.46, black: false },
+  { name: "미", freq: 659.25, black: false },
+  { name: "레♯", freq: 622.25, black: true },
+  { name: "레", freq: 587.33, black: false },
+  { name: "도♯", freq: 554.37, black: true },
+  { name: "도", freq: 523.25, black: false },
+  { name: "시", freq: 493.88, black: false },
+  { name: "라♯", freq: 466.16, black: true },
+  { name: "라", freq: 440.00, black: false },
+  { name: "솔♯", freq: 415.30, black: true },
+  { name: "솔", freq: 392.00, black: false },
+  { name: "파♯", freq: 369.99, black: true },
+  { name: "파", freq: 349.23, black: false },
+  { name: "미", freq: 329.63, black: false },
+  { name: "레♯", freq: 311.13, black: true },
+  { name: "레", freq: 293.66, black: false },
+  { name: "도♯", freq: 277.18, black: true },
+  { name: "도", freq: 261.63, black: false },
+  { name: "시", freq: 246.94, black: false },
+  { name: "라♯", freq: 233.08, black: true },
+  { name: "라", freq: 220.00, black: false },
+  { name: "솔♯", freq: 207.65, black: true },
+  { name: "솔", freq: 196.00, black: false }
+];
 
 let audioCtx = null;
 let osc = null;
@@ -153,9 +246,23 @@ let gain = null;
 let playMode = false;
 let currentFreq = 440;
 let octaveLevel = 0;
+let currentNoteName = "-";
 
-let leftWave = createWaveDetector("left");
-let rightWave = createWaveDetector("right");
+let clapCooldown = 0;
+let clapRipples = [];
+
+function buildPitchBar() {
+  pitchBar.innerHTML = "";
+
+  scaleNotes.forEach((note, index) => {
+    const cell = document.createElement("div");
+    cell.className = `noteCell ${note.black ? "black" : "white"}`;
+    cell.dataset.index = index;
+    cell.textContent = note.name;
+    pitchBar.appendChild(cell);
+  });
+}
+buildPitchBar();
 
 function resizeCanvas() {
   canvas.width = window.innerWidth;
@@ -214,15 +321,12 @@ function palmCenter(landmarks) {
 
 function drawHand(landmarks) {
   const wrist = point(landmarks[0]);
-  const center = palmCenter(landmarks);
-
-  drawLine(wrist, center);
 
   for (let i = 0; i < 5; i++) {
     const base = point(landmarks[baseJointIds[i]]);
     const tip = point(landmarks[fingertipIds[i]]);
 
-    drawLine(center, base);
+    drawLine(wrist, base);
     drawLine(base, tip);
 
     drawPoint(base, 6);
@@ -230,7 +334,30 @@ function drawHand(landmarks) {
   }
 
   drawPoint(wrist, 7);
-  drawPoint(center, 9);
+}
+
+function addClapRipple(x, y) {
+  clapRipples.push({
+    x,
+    y,
+    r: 12,
+    alpha: 1
+  });
+}
+
+function drawClapRipples() {
+  clapRipples.forEach(ripple => {
+    ctx.beginPath();
+    ctx.arc(ripple.x, ripple.y, ripple.r, 0, Math.PI * 2);
+    ctx.strokeStyle = `rgba(255,255,255,${ripple.alpha})`;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    ripple.r += 7;
+    ripple.alpha -= 0.045;
+  });
+
+  clapRipples = clapRipples.filter(ripple => ripple.alpha > 0);
 }
 
 function initAudio() {
@@ -264,20 +391,20 @@ function setFrequency(freq) {
   }
 }
 
-function yToFrequency(y) {
-  const minFreq = 180;
-  const maxFreq = 880;
-  const t = 1 - Math.min(Math.max(y / canvas.height, 0), 1);
-  const baseFreq = minFreq + (maxFreq - minFreq) * t;
-  return baseFreq * Math.pow(2, octaveLevel);
+function yToNoteIndex(y) {
+  const top = canvas.height * 0.10;
+  const bottom = canvas.height * 0.90;
+  const clamped = Math.min(Math.max(y, top), bottom);
+  const local = (clamped - top) / (bottom - top);
+  return Math.round(local * (scaleNotes.length - 1));
 }
 
-function updatePitchBar(y) {
-  const top = 0.2;
-  const height = 0.6;
-  const clamped = Math.min(Math.max(y / canvas.height, top), top + height);
-  const local = (clamped - top) / height;
-  pitchDot.style.top = `${local * 100}%`;
+function updatePitchBar(noteIndex) {
+  const cells = document.querySelectorAll(".noteCell");
+
+  cells.forEach((cell, index) => {
+    cell.classList.toggle("active", index === noteIndex);
+  });
 }
 
 function detectStrictPinch(landmarks) {
@@ -298,53 +425,20 @@ function isRightSideHand(landmarks) {
   return point(landmarks[0]).x >= canvas.width * 0.5;
 }
 
-function createWaveDetector(side) {
-  return {
-    side,
-    lastX: null,
-    lastDir: 0,
-    changes: 0,
-    lastChangeTime: 0,
-    cooldownUntil: 0
-  };
+function detectClap(hand1, hand2) {
+  const c1 = palmCenter(hand1);
+  const c2 = palmCenter(hand2);
+  const d = dist(c1, c2);
+
+  return d < canvas.width * 0.18;
 }
 
-function updateWaveDetector(detector, x) {
-  const now = Date.now();
+function getClapSide(hand1, hand2) {
+  const c1 = palmCenter(hand1);
+  const c2 = palmCenter(hand2);
+  const x = (c1.x + c2.x) / 2;
 
-  if (now < detector.cooldownUntil) return false;
-
-  if (detector.lastX === null) {
-    detector.lastX = x;
-    return false;
-  }
-
-  const dx = x - detector.lastX;
-  detector.lastX = x;
-
-  const threshold = canvas.width * 0.018;
-  if (Math.abs(dx) < threshold) return false;
-
-  const dir = dx > 0 ? 1 : -1;
-
-  if (detector.lastDir !== 0 && dir !== detector.lastDir) {
-    if (now - detector.lastChangeTime < 900) {
-      detector.changes++;
-    } else {
-      detector.changes = 1;
-    }
-
-    detector.lastChangeTime = now;
-
-    if (detector.changes >= 3) {
-      detector.changes = 0;
-      detector.cooldownUntil = now + 900;
-      return true;
-    }
-  }
-
-  detector.lastDir = dir;
-  return false;
+  return x < canvas.width * 0.5 ? "left" : "right";
 }
 
 function updateOctave(delta) {
@@ -371,13 +465,14 @@ playBtn.addEventListener("click", async () => {
 
   playMode = !playMode;
   playBtn.classList.toggle("on", playMode);
-  playBtn.textContent = playMode ? "연주 중" : "연주";
+  playBtn.textContent = playMode ? "손타마톤 ON" : "손타마톤";
 
   if (!playMode) setSound(false);
 });
 
 function onResults(results) {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
+  drawClapRipples();
 
   let leftIndexY = null;
   let rightPinch = false;
@@ -388,31 +483,50 @@ function onResults(results) {
   handsList.forEach(hand => {
     drawHand(hand);
 
-    const wrist = point(hand[0]);
-
     if (isLeftSideHand(hand)) {
       leftIndexY = point(hand[8]).y;
-
-      if (updateWaveDetector(leftWave, wrist.x)) {
-        updateOctave(1);
-        octaveChanged = true;
-      }
     }
 
     if (isRightSideHand(hand)) {
       rightPinch = detectStrictPinch(hand);
-
-      if (updateWaveDetector(rightWave, wrist.x)) {
-        updateOctave(-1);
-        octaveChanged = true;
-      }
     }
   });
 
+  if (handsList.length === 2) {
+    const [h1, h2] = handsList;
+    const now = Date.now();
+
+    if (detectClap(h1, h2) && now > clapCooldown) {
+      const side = getClapSide(h1, h2);
+      const c1 = palmCenter(h1);
+      const c2 = palmCenter(h2);
+
+      if (side === "left") {
+        updateOctave(-1);
+      } else {
+        updateOctave(1);
+      }
+
+      addClapRipple(
+        (c1.x + c2.x) / 2,
+        (c1.y + c2.y) / 2
+      );
+
+      clapCooldown = now + 800;
+      octaveChanged = true;
+    }
+  }
+
   if (leftIndexY !== null) {
-    const freq = yToFrequency(leftIndexY);
+    const noteIndex = yToNoteIndex(leftIndexY);
+    const note = scaleNotes[noteIndex];
+    const freq = note.freq * Math.pow(2, octaveLevel);
+
+    currentNoteName = note.name;
+    noteBox.textContent = currentNoteName;
+
     setFrequency(freq);
-    updatePitchBar(leftIndexY);
+    updatePitchBar(noteIndex);
   }
 
   const shouldSound = playMode && leftIndexY !== null && rightPinch;
@@ -421,9 +535,9 @@ function onResults(results) {
   if (handsList.length === 0) {
     statusBox.textContent = "손을 카메라에 비춰주세요";
   } else if (octaveChanged) {
-    statusBox.textContent = "옥타브 변경됨";
+    statusBox.textContent = "박수로 옥타브 변경됨";
   } else if (shouldSound) {
-    statusBox.textContent = `연주 중 · ${Math.round(currentFreq)}Hz`;
+    statusBox.textContent = `연주 중 · ${currentNoteName}`;
   } else if (playMode) {
     statusBox.textContent = "오른손 엄지+검지를 완전히 붙이면 소리";
   } else {
