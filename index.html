@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>손으로말해요 ver 1.9</title>
+<title>손으로말해요 ver 2.0</title>
 
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
@@ -341,7 +341,7 @@ video, canvas {
 
   <canvas id="canvas"></canvas>
 
-  <div id="version">손으로말해요 · ver 1.9</div>
+  <div id="version">손으로말해요 · ver 2.0</div>
 
   <div id="statusPanel">
     <div id="status">손을 카메라에 비춰주세요</div>
@@ -488,10 +488,14 @@ buildPitchBar();
 buildGuitarUI();
 
 function resizeCanvas() {
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
+  const rect = canvas.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = Math.round(rect.width * dpr);
+  canvas.height = Math.round(rect.height * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
 window.addEventListener("resize", resizeCanvas);
+window.addEventListener("orientationchange", resizeCanvas);
 resizeCanvas();
 
 function setMode(nextMode) {
@@ -529,12 +533,36 @@ guitarBtn.addEventListener("click", async () => {
   setMode(mode === "guitar" ? "home" : "guitar");
 });
 
+function getStageSize() {
+  const rect = canvas.getBoundingClientRect();
+  return { width: rect.width || window.innerWidth, height: rect.height || window.innerHeight };
+}
+
+function getVideoFitRect() {
+  const stage = getStageSize();
+  const vw = video.videoWidth || 1280;
+  const vh = video.videoHeight || 720;
+  const scale = Math.max(stage.width / vw, stage.height / vh);
+  const drawW = vw * scale;
+  const drawH = vh * scale;
+  return {
+    x: (stage.width - drawW) / 2,
+    y: (stage.height - drawH) / 2,
+    width: drawW,
+    height: drawH,
+    stageWidth: stage.width,
+    stageHeight: stage.height
+  };
+}
+
 function point(lm) {
-  return { x: lm.x * canvas.width, y: lm.y * canvas.height };
+  const fit = getVideoFitRect();
+  const rawX = fit.x + lm.x * fit.width;
+  return { x: fit.stageWidth - rawX, y: fit.y + lm.y * fit.height };
 }
 
 function screenPoint(lm) {
-  return { x: canvas.width - lm.x * canvas.width, y: lm.y * canvas.height };
+  return point(lm);
 }
 
 function screenX(landmarks) {
@@ -596,7 +624,7 @@ function getHandLabel(handednessItem, landmarks) {
   const raw = handednessItem?.label || handednessItem?.classification?.[0]?.label || null;
   const normalized = normalizeHandLabel(raw);
   if (normalized) return normalized;
-  return screenX(landmarks) < canvas.width * 0.5 ? "Left" : "Right";
+  return screenX(landmarks) < getStageSize().width * 0.5 ? "Left" : "Right";
 }
 
 function isPalmFacingCamera(landmarks, handLabel) {
@@ -634,10 +662,11 @@ function palmCenter(landmarks) {
   const ids = [0, 5, 9, 13, 17];
   let x = 0, y = 0;
   ids.forEach(id => {
-    x += landmarks[id].x;
-    y += landmarks[id].y;
+    const p = point(landmarks[id]);
+    x += p.x;
+    y += p.y;
   });
-  return { x: (x / ids.length) * canvas.width, y: (y / ids.length) * canvas.height };
+  return { x: x / ids.length, y: y / ids.length };
 }
 
 function handSize(landmarks) {
@@ -755,6 +784,21 @@ function playGuitarString() {
   playGuitarNote(freq);
 }
 
+function playGuitarChord() {
+  const chord = guitarChords[selectedChordIndex];
+  chord.notes.forEach((freq, i) => {
+    setTimeout(() => playGuitarNote(freq), i * 28);
+  });
+}
+
+function isChordAutoMode() {
+  return autoPlayLevel >= 7;
+}
+
+function updateGuitarModeVisual() {
+  guitarUI.classList.toggle("chordMode", isChordAutoMode());
+}
+
 function yToNoteIndex(y) {
   const top = canvas.height * 0.10;
   const bottom = canvas.height * 0.90;
@@ -778,12 +822,12 @@ function detectStrictPinch(landmarks) {
 
 function isLeftSideHand(landmarks, handLabel = null) {
   if (handLabel) return handLabel === "Left";
-  return screenX(landmarks) < canvas.width * 0.5;
+  return screenX(landmarks) < getStageSize().width * 0.5;
 }
 
 function isRightSideHand(landmarks, handLabel = null) {
   if (handLabel) return handLabel === "Right";
-  return screenX(landmarks) >= canvas.width * 0.5;
+  return screenX(landmarks) >= getStageSize().width * 0.5;
 }
 
 function detectClap(hand1, hand2) {
@@ -793,7 +837,7 @@ function detectClap(hand1, hand2) {
 
 function getClapSide(hand1, hand2) {
   const x = (screenX(hand1) + screenX(hand2)) / 2;
-  return x < canvas.width * 0.5 ? "left" : "right";
+  return x < getStageSize().width * 0.5 ? "left" : "right";
 }
 
 function updateOctave(delta) {
@@ -854,19 +898,19 @@ function updateAutoDial(rightHand) {
   const center = { x: knob.left + knob.width / 2, y: knob.top + knob.height / 2 };
 
   const pinchClose = dist(thumb, index) < Math.max(handSize(rightHand) * 0.32, 16);
-  const indexNearKnob = dist(index, center) < knob.width * 0.52;
+  const indexNearKnob = dist(index, center) < knob.width * 0.70;
 
   if (pinchClose && indexNearKnob) {
     const ang = Math.atan2(index.y - center.y, index.x - center.x);
     let deg = ang * 180 / Math.PI + 90;
     if (deg < 0) deg += 360;
 
-    if (deg > 300 || deg < 25) autoPlayLevel = 0;
-    else if (deg < 95) autoPlayLevel = 1;
-    else if (deg < 180) autoPlayLevel = 2;
-    else autoPlayLevel = 3;
+    // 0~10단계. 1~6은 선택한 줄 반복, 7~10은 선택한 코드 전체 연주.
+    if (deg > 335 || deg < 15) autoPlayLevel = 0;
+    else autoPlayLevel = Math.max(1, Math.min(10, Math.round(deg / 32)));
 
-    autoDial.style.setProperty("--dial-rot", `${autoPlayLevel * 55}deg`);
+    autoDial.style.setProperty("--dial-rot", `${autoPlayLevel * 32}deg`);
+    updateGuitarModeVisual();
   }
 }
 
@@ -888,16 +932,17 @@ function handleAutoPlay() {
   if (autoPlayLevel <= 0) return;
 
   const now = Date.now();
-  const intervals = [0, 850, 520, 320];
+  const intervals = [0, 1050, 880, 720, 560, 420, 300, 1150, 900, 680, 480];
 
   if (now - autoLastTime > intervals[autoPlayLevel]) {
-    playGuitarString();
+    if (isChordAutoMode()) playGuitarChord();
+    else playGuitarString();
     autoLastTime = now;
   }
 }
 
 function onResults(results) {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.clearRect(0, 0, getStageSize().width, getStageSize().height);
 
   const handsList = results.multiHandLandmarks || [];
   const handednessList = results.multiHandedness || [];
