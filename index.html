@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Hand Sound ver 1.6.2</title>
+<title>Hand Sound ver 1.7</title>
 
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
@@ -39,10 +39,38 @@ video, canvas {
   position: absolute;
   top: 10px;
   left: 12px;
-  z-index: 30;
+  z-index: 40;
   color: white;
   font-size: 12px;
   opacity: 0.9;
+}
+
+#homePanel {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.homeBtn {
+  border: 1px solid rgba(255,255,255,0.85);
+  background: rgba(255,255,255,0.14);
+  color: white;
+  border-radius: 999px;
+  padding: 14px 34px;
+  font-size: 18px;
+  font-weight: bold;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+}
+
+.homeBtn.on {
+  background: rgba(0,255,120,0.28);
+  border-color: rgba(0,255,120,0.95);
 }
 
 #statusPanel {
@@ -52,6 +80,7 @@ video, canvas {
   z-index: 30;
   color: white;
   font-size: 12px;
+  display: none;
 }
 
 #status {
@@ -59,21 +88,6 @@ video, canvas {
   border-radius: 999px;
   background: rgba(0,0,0,0.4);
   margin-bottom: 8px;
-}
-
-#playBtn {
-  border: 1px solid rgba(255,255,255,0.8);
-  background: rgba(255,255,255,0.14);
-  color: white;
-  border-radius: 999px;
-  padding: 8px 16px;
-  font-size: 13px;
-  cursor: pointer;
-}
-
-#playBtn.on {
-  background: rgba(0,255,110,0.28);
-  border-color: rgba(0,255,120,0.9);
 }
 
 #pitchBar {
@@ -88,6 +102,7 @@ video, canvas {
   border: 1.5px solid rgba(255,255,255,0.95);
   box-shadow: 0 0 16px rgba(255,255,255,0.45);
   background: white;
+  display: none;
 }
 
 .noteCell {
@@ -101,15 +116,8 @@ video, canvas {
   border-bottom: 1px solid rgba(90,90,90,0.45);
 }
 
-.noteCell.white {
-  background: #fff;
-  color: #111;
-}
-
-.noteCell.black {
-  background: #050505;
-  color: #fff;
-}
+.noteCell.white { background: #fff; color: #111; }
+.noteCell.black { background: #050505; color: #fff; }
 
 .noteCell.active {
   background: #ff2626 !important;
@@ -121,31 +129,160 @@ video, canvas {
   text-shadow: 0 0 6px rgba(255,255,255,0.9);
 }
 
-#octaveBox {
+#octaveBox, #noteBox {
   position: absolute;
   right: 50px;
-  top: 50%;
-  transform: translateY(-50%);
   z-index: 30;
   color: white;
   font-size: 13px;
   padding: 6px 10px;
   border-radius: 999px;
   background: rgba(0,0,0,0.45);
+  display: none;
+}
+
+#octaveBox {
+  top: 50%;
+  transform: translateY(-50%);
 }
 
 #noteBox {
-  position: absolute;
-  right: 50px;
   top: calc(50% - 42px);
-  z-index: 30;
-  color: white;
-  font-size: 13px;
   font-weight: bold;
-  padding: 6px 10px;
-  border-radius: 999px;
   background: rgba(255,0,0,0.5);
   text-shadow: 0 0 8px rgba(255,255,255,0.7);
+}
+
+#guitarUI {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: none;
+  pointer-events: none;
+}
+
+#guitarBg {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 58%;
+  background:
+    linear-gradient(90deg, rgba(90,40,8,0.9), rgba(190,98,24,0.9), rgba(120,55,12,0.9)),
+    repeating-linear-gradient(90deg, rgba(255,255,255,0.08) 0 2px, transparent 2px 18px);
+  border-top: 1px solid rgba(255,255,255,0.2);
+}
+
+#guitarNeck {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 10%;
+  height: 31%;
+  background: linear-gradient(#1a0e0d, #090606);
+  box-shadow: inset 0 12px 22px rgba(255,255,255,0.07);
+}
+
+.guitarString {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: rgba(235,235,235,0.85);
+  box-shadow: 0 0 6px rgba(255,255,255,0.75);
+}
+
+.guitarString.active {
+  background: #ff3333;
+  height: 4px;
+  box-shadow: 0 0 16px rgba(255,0,0,1);
+}
+
+#chordArea {
+  position: absolute;
+  left: 11%;
+  right: 11%;
+  bottom: 8%;
+  height: 38%;
+  display: flex;
+  gap: 8px;
+}
+
+.chordPad {
+  flex: 1;
+  position: relative;
+  color: white;
+  font-size: 20px;
+  text-align: center;
+  padding-top: 12px;
+  background: rgba(210,130,65,0.42);
+  border: 1px solid rgba(255,255,255,0.12);
+  clip-path: polygon(50% 0, 100% 8%, 100% 92%, 50% 100%, 0 92%, 0 8%);
+}
+
+.chordPad.active {
+  background: rgba(255,50,50,0.58);
+  box-shadow: 0 0 18px rgba(255,0,0,0.9);
+}
+
+#playZone {
+  position: absolute;
+  top: 8%;
+  right: 8%;
+  width: 82px;
+  height: 82px;
+  border-radius: 50%;
+  border: 2px solid rgba(255,255,255,0.75);
+  color: white;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0,0,0,0.38);
+}
+
+#playZone.active {
+  background: rgba(255,0,0,0.65);
+  box-shadow: 0 0 22px rgba(255,0,0,0.95);
+}
+
+#autoDial {
+  position: absolute;
+  top: 10%;
+  right: 18%;
+  width: 92px;
+  height: 92px;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.42);
+  border: 2px solid rgba(255,255,255,0.5);
+  color: white;
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#autoDial::after {
+  content: "";
+  position: absolute;
+  width: 6px;
+  height: 26px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.9);
+  top: 8px;
+  transform-origin: 3px 38px;
+  transform: rotate(var(--dial-rot, 0deg));
+}
+
+#guitarStatus {
+  position: absolute;
+  top: 32px;
+  left: 12px;
+  color: white;
+  font-size: 12px;
+  padding: 7px 11px;
+  border-radius: 999px;
+  background: rgba(0,0,0,0.45);
 }
 
 @media (orientation: landscape) and (max-width: 900px) {
@@ -156,27 +293,33 @@ video, canvas {
     width: 20px;
   }
 
-  #octaveBox {
+  #octaveBox, #noteBox {
     right: 42px;
     font-size: 12px;
     padding: 5px 9px;
   }
 
-  #noteBox {
-    right: 42px;
-    top: calc(50% - 40px);
-    font-size: 12px;
-    padding: 5px 9px;
+  #noteBox { top: calc(50% - 40px); }
+
+  .homeBtn {
+    padding: 12px 30px;
+    font-size: 16px;
   }
 
-  #statusPanel {
-    top: 30px;
-    left: 10px;
+  .chordPad {
+    font-size: 16px;
+    padding-top: 8px;
   }
 
-  #playBtn {
-    padding: 9px 18px;
-    font-size: 14px;
+  #playZone {
+    width: 70px;
+    height: 70px;
+  }
+
+  #autoDial {
+    width: 74px;
+    height: 74px;
+    right: 20%;
   }
 }
 </style>
@@ -190,13 +333,26 @@ video, canvas {
   <div id="noteBox">-</div>
   <div id="octaveBox">옥타브 x1</div>
 
+  <div id="guitarUI">
+    <div id="guitarBg"></div>
+    <div id="guitarNeck"></div>
+    <div id="chordArea"></div>
+    <div id="autoDial">자동<br>재생</div>
+    <div id="playZone">PLAY</div>
+    <div id="guitarStatus">기타 모드</div>
+  </div>
+
   <canvas id="canvas"></canvas>
 
-  <div id="version">ver 1.6.2</div>
+  <div id="version">ver 1.7</div>
 
   <div id="statusPanel">
     <div id="status">손을 카메라에 비춰주세요</div>
-    <button id="playBtn">손타마톤</button>
+  </div>
+
+  <div id="homePanel">
+    <button id="handBtn" class="homeBtn">손타마톤</button>
+    <button id="guitarBtn" class="homeBtn">기타</button>
   </div>
 </div>
 
@@ -206,13 +362,25 @@ const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
 
 const statusBox = document.getElementById("status");
-const playBtn = document.getElementById("playBtn");
+const statusPanel = document.getElementById("statusPanel");
+const handBtn = document.getElementById("handBtn");
+const guitarBtn = document.getElementById("guitarBtn");
+
 const pitchBar = document.getElementById("pitchBar");
 const octaveBox = document.getElementById("octaveBox");
 const noteBox = document.getElementById("noteBox");
 
+const guitarUI = document.getElementById("guitarUI");
+const guitarNeck = document.getElementById("guitarNeck");
+const chordArea = document.getElementById("chordArea");
+const playZone = document.getElementById("playZone");
+const autoDial = document.getElementById("autoDial");
+const guitarStatus = document.getElementById("guitarStatus");
+
 const fingertipIds = [4, 8, 12, 16, 20];
 const baseJointIds = [1, 5, 9, 13, 17];
+
+let mode = "home";
 
 const scaleNotes = [
   { name: "파", freq: 698.46, black: false },
@@ -240,6 +408,21 @@ const scaleNotes = [
   { name: "솔", freq: 196.00, black: false }
 ];
 
+const guitarChords = [
+  { name: "Em", notes: [164.81, 196.00, 246.94, 329.63, 392.00, 659.25] },
+  { name: "Am", notes: [220.00, 261.63, 329.63, 440.00, 523.25, 659.25] },
+  { name: "Dm", notes: [146.83, 220.00, 293.66, 349.23, 440.00, 587.33] },
+  { name: "G", notes: [196.00, 246.94, 293.66, 392.00, 493.88, 783.99] },
+  { name: "C", notes: [130.81, 196.00, 261.63, 329.63, 392.00, 523.25] },
+  { name: "F", notes: [174.61, 220.00, 261.63, 349.23, 440.00, 698.46] },
+  { name: "B♭", notes: [116.54, 174.61, 233.08, 293.66, 349.23, 466.16] },
+  { name: "Bdim", notes: [123.47, 174.61, 246.94, 293.66, 349.23, 493.88] },
+  { name: "E", notes: [164.81, 207.65, 246.94, 329.63, 415.30, 659.25] },
+  { name: "A♭", notes: [207.65, 261.63, 311.13, 415.30, 523.25, 830.61] },
+  { name: "Fm", notes: [174.61, 207.65, 261.63, 349.23, 415.30, 698.46] },
+  { name: "Gm", notes: [196.00, 233.08, 293.66, 392.00, 466.16, 783.99] }
+];
+
 let audioCtx = null;
 let osc = null;
 let gain = null;
@@ -251,9 +434,15 @@ let currentNoteName = "-";
 let clapCooldown = 0;
 let clapRipples = [];
 
+let selectedChordIndex = 0;
+let selectedStringIndex = 2;
+let guitarCooldown = 0;
+let autoPlayLevel = 0;
+let autoTimer = 0;
+let autoLastTime = 0;
+
 function buildPitchBar() {
   pitchBar.innerHTML = "";
-
   scaleNotes.forEach((note, index) => {
     const cell = document.createElement("div");
     cell.className = `noteCell ${note.black ? "black" : "white"}`;
@@ -262,7 +451,30 @@ function buildPitchBar() {
     pitchBar.appendChild(cell);
   });
 }
+
+function buildGuitarUI() {
+  chordArea.innerHTML = "";
+  guitarNeck.innerHTML = "";
+
+  for (let i = 0; i < 6; i++) {
+    const s = document.createElement("div");
+    s.className = "guitarString";
+    s.style.top = `${12 + i * 16}%`;
+    s.dataset.string = i;
+    guitarNeck.appendChild(s);
+  }
+
+  guitarChords.forEach((chord, index) => {
+    const pad = document.createElement("div");
+    pad.className = "chordPad";
+    pad.dataset.index = index;
+    pad.textContent = chord.name;
+    chordArea.appendChild(pad);
+  });
+}
+
 buildPitchBar();
+buildGuitarUI();
 
 function resizeCanvas() {
   canvas.width = window.innerWidth;
@@ -271,15 +483,47 @@ function resizeCanvas() {
 window.addEventListener("resize", resizeCanvas);
 resizeCanvas();
 
+function setMode(nextMode) {
+  mode = nextMode;
+
+  handBtn.classList.toggle("on", mode === "hand");
+  guitarBtn.classList.toggle("on", mode === "guitar");
+
+  const handVisible = mode === "hand";
+  const guitarVisible = mode === "guitar";
+
+  statusPanel.style.display = handVisible ? "block" : "none";
+  pitchBar.style.display = handVisible ? "block" : "none";
+  octaveBox.style.display = handVisible ? "block" : "none";
+  noteBox.style.display = handVisible ? "block" : "none";
+  guitarUI.style.display = guitarVisible ? "block" : "none";
+
+  playMode = handVisible;
+  setSound(false);
+}
+
+handBtn.addEventListener("click", async () => {
+  initAudio();
+  if (audioCtx.state === "suspended") await audioCtx.resume();
+  setMode(mode === "hand" ? "home" : "hand");
+});
+
+guitarBtn.addEventListener("click", async () => {
+  initAudio();
+  if (audioCtx.state === "suspended") await audioCtx.resume();
+  setMode(mode === "guitar" ? "home" : "guitar");
+});
+
 function point(lm) {
-  return {
-    x: lm.x * canvas.width,
-    y: lm.y * canvas.height
-  };
+  return { x: lm.x * canvas.width, y: lm.y * canvas.height };
+}
+
+function screenPoint(lm) {
+  return { x: canvas.width - lm.x * canvas.width, y: lm.y * canvas.height };
 }
 
 function screenX(landmarks) {
-  return canvas.width - point(landmarks[0]).x;
+  return screenPoint(landmarks[0]).x;
 }
 
 function dist(a, b) {
@@ -311,22 +555,15 @@ function drawLine(a, b) {
 function palmCenter(landmarks) {
   const ids = [0, 5, 9, 13, 17];
   let x = 0, y = 0;
-
   ids.forEach(id => {
     x += landmarks[id].x;
     y += landmarks[id].y;
   });
-
-  return {
-    x: (x / ids.length) * canvas.width,
-    y: (y / ids.length) * canvas.height
-  };
+  return { x: (x / ids.length) * canvas.width, y: (y / ids.length) * canvas.height };
 }
 
 function handSize(landmarks) {
-  const wrist = point(landmarks[0]);
-  const middleBase = point(landmarks[9]);
-  return Math.max(dist(wrist, middleBase), 1);
+  return Math.max(dist(point(landmarks[0]), point(landmarks[9])), 1);
 }
 
 function drawHand(landmarks) {
@@ -335,10 +572,8 @@ function drawHand(landmarks) {
   for (let i = 0; i < 5; i++) {
     const base = point(landmarks[baseJointIds[i]]);
     const tip = point(landmarks[fingertipIds[i]]);
-
     drawLine(wrist, base);
     drawLine(base, tip);
-
     drawPoint(base, 6);
     drawPoint(tip, 7);
   }
@@ -347,12 +582,7 @@ function drawHand(landmarks) {
 }
 
 function addClapRipple(x, y) {
-  clapRipples.push({
-    x,
-    y,
-    r: 12,
-    alpha: 1
-  });
+  clapRipples.push({ x, y, r: 12, alpha: 1 });
 }
 
 function drawClapRipples() {
@@ -362,11 +592,9 @@ function drawClapRipples() {
     ctx.strokeStyle = `rgba(255,255,255,${ripple.alpha})`;
     ctx.lineWidth = 2;
     ctx.stroke();
-
     ripple.r += 7;
     ripple.alpha -= 0.045;
   });
-
   clapRipples = clapRipples.filter(ripple => ripple.alpha > 0);
 }
 
@@ -388,7 +616,6 @@ function initAudio() {
 
 function setSound(active) {
   if (!audioCtx || !gain) return;
-
   const now = audioCtx.currentTime;
   gain.gain.cancelScheduledValues(now);
   gain.gain.setTargetAtTime(active ? 0.22 : 0, now, 0.03);
@@ -401,6 +628,39 @@ function setFrequency(freq) {
   }
 }
 
+function playGuitarNote(freq) {
+  if (!audioCtx) return;
+
+  const now = audioCtx.currentTime;
+  const o1 = audioCtx.createOscillator();
+  const o2 = audioCtx.createOscillator();
+  const g = audioCtx.createGain();
+
+  o1.type = "triangle";
+  o2.type = "sine";
+  o1.frequency.value = freq;
+  o2.frequency.value = freq * 2.01;
+
+  g.gain.setValueAtTime(0.0001, now);
+  g.gain.exponentialRampToValueAtTime(0.25, now + 0.015);
+  g.gain.exponentialRampToValueAtTime(0.0001, now + 0.55);
+
+  o1.connect(g);
+  o2.connect(g);
+  g.connect(audioCtx.destination);
+
+  o1.start(now);
+  o2.start(now);
+  o1.stop(now + 0.6);
+  o2.stop(now + 0.6);
+}
+
+function playGuitarString() {
+  const chord = guitarChords[selectedChordIndex];
+  const freq = chord.notes[selectedStringIndex] || chord.notes[0];
+  playGuitarNote(freq);
+}
+
 function yToNoteIndex(y) {
   const top = canvas.height * 0.10;
   const bottom = canvas.height * 0.90;
@@ -410,9 +670,7 @@ function yToNoteIndex(y) {
 }
 
 function updatePitchBar(noteIndex) {
-  const cells = document.querySelectorAll(".noteCell");
-
-  cells.forEach((cell, index) => {
+  document.querySelectorAll(".noteCell").forEach((cell, index) => {
     cell.classList.toggle("active", index === noteIndex);
   });
 }
@@ -420,10 +678,7 @@ function updatePitchBar(noteIndex) {
 function detectStrictPinch(landmarks) {
   const thumbTip = point(landmarks[4]);
   const indexTip = point(landmarks[8]);
-  const wrist = point(landmarks[0]);
-  const indexBase = point(landmarks[5]);
-  const handSizeValue = Math.max(dist(wrist, indexBase), 1);
-
+  const handSizeValue = Math.max(dist(point(landmarks[0]), point(landmarks[5])), 1);
   return dist(thumbTip, indexTip) < handSizeValue * 0.42;
 }
 
@@ -436,20 +691,12 @@ function isRightSideHand(landmarks) {
 }
 
 function detectClap(hand1, hand2) {
-  const c1 = palmCenter(hand1);
-  const c2 = palmCenter(hand2);
-
   const avgSize = (handSize(hand1) + handSize(hand2)) / 2;
-  const palmDistance = dist(c1, c2);
-
-  return palmDistance < avgSize * 1.05;
+  return dist(palmCenter(hand1), palmCenter(hand2)) < avgSize * 1.05;
 }
 
 function getClapSide(hand1, hand2) {
-  const x1 = screenX(hand1);
-  const x2 = screenX(hand2);
-  const x = (x1 + x2) / 2;
-
+  const x = (screenX(hand1) + screenX(hand2)) / 2;
   return x < canvas.width * 0.5 ? "left" : "right";
 }
 
@@ -459,108 +706,187 @@ function updateOctave(delta) {
 }
 
 function updateOctaveText() {
-  if (octaveLevel === 0) {
-    octaveBox.textContent = "옥타브 x1";
-  } else if (octaveLevel > 0) {
-    octaveBox.textContent = `옥타브 x${Math.pow(2, octaveLevel)}`;
-  } else {
-    octaveBox.textContent = `옥타브 x1/${Math.pow(2, Math.abs(octaveLevel))}`;
+  if (octaveLevel === 0) octaveBox.textContent = "옥타브 x1";
+  else if (octaveLevel > 0) octaveBox.textContent = `옥타브 x${Math.pow(2, octaveLevel)}`;
+  else octaveBox.textContent = `옥타브 x1/${Math.pow(2, Math.abs(octaveLevel))}`;
+}
+
+function rectOf(el) {
+  return el.getBoundingClientRect();
+}
+
+function inRect(p, r, margin = 0) {
+  return p.x >= r.left - margin && p.x <= r.right + margin && p.y >= r.top - margin && p.y <= r.bottom + margin;
+}
+
+function updateGuitarSelection(leftHand) {
+  const p = screenPoint(leftHand[8]);
+  const area = rectOf(chordArea);
+  const neck = rectOf(guitarNeck);
+
+  if (inRect(p, area, 12)) {
+    const localX = Math.min(Math.max(p.x - area.left, 0), area.width);
+    selectedChordIndex = Math.min(guitarChords.length - 1, Math.floor(localX / (area.width / guitarChords.length)));
+  }
+
+  if (inRect(p, neck, 28)) {
+    const localY = Math.min(Math.max(p.y - neck.top, 0), neck.height);
+    selectedStringIndex = Math.min(5, Math.max(0, Math.round((localY / neck.height) * 5)));
+  }
+
+  document.querySelectorAll(".chordPad").forEach((pad, index) => {
+    pad.classList.toggle("active", index === selectedChordIndex);
+  });
+
+  document.querySelectorAll(".guitarString").forEach((s, index) => {
+    s.classList.toggle("active", index === selectedStringIndex);
+  });
+}
+
+function updateAutoDial(rightHand) {
+  const thumb = screenPoint(rightHand[4]);
+  const index = screenPoint(rightHand[8]);
+  const knob = rectOf(autoDial);
+  const center = { x: knob.left + knob.width / 2, y: knob.top + knob.height / 2 };
+
+  const pinchClose = dist(thumb, index) < Math.max(handSize(rightHand) * 0.32, 16);
+  const indexNearKnob = dist(index, center) < knob.width * 0.52;
+
+  if (pinchClose && indexNearKnob) {
+    const ang = Math.atan2(index.y - center.y, index.x - center.x);
+    let deg = ang * 180 / Math.PI + 90;
+    if (deg < 0) deg += 360;
+
+    if (deg > 300 || deg < 25) autoPlayLevel = 0;
+    else if (deg < 95) autoPlayLevel = 1;
+    else if (deg < 180) autoPlayLevel = 2;
+    else autoPlayLevel = 3;
+
+    autoDial.style.setProperty("--dial-rot", `${autoPlayLevel * 55}deg`);
   }
 }
 
-playBtn.addEventListener("click", async () => {
-  initAudio();
+function handleGuitarPlay(rightHand) {
+  const p = screenPoint(rightHand[8]);
+  const playR = rectOf(playZone);
+  const now = Date.now();
 
-  if (audioCtx.state === "suspended") {
-    await audioCtx.resume();
+  const playActive = inRect(p, playR, 0);
+  playZone.classList.toggle("active", playActive);
+
+  if (playActive && now > guitarCooldown) {
+    playGuitarString();
+    guitarCooldown = now + 180;
   }
+}
 
-  playMode = !playMode;
-  playBtn.classList.toggle("on", playMode);
-  playBtn.textContent = playMode ? "손타마톤 ON" : "손타마톤";
+function handleAutoPlay() {
+  if (autoPlayLevel <= 0) return;
 
-  if (!playMode) setSound(false);
-});
+  const now = Date.now();
+  const intervals = [0, 850, 520, 320];
+
+  if (now - autoLastTime > intervals[autoPlayLevel]) {
+    playGuitarString();
+    autoLastTime = now;
+  }
+}
 
 function onResults(results) {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  drawClapRipples();
-
-  let leftIndexY = null;
-  let rightPinch = false;
-  let octaveChanged = false;
 
   const handsList = results.multiHandLandmarks || [];
 
-  handsList.forEach(hand => {
-    drawHand(hand);
+  if (mode === "home") {
+    setSound(false);
+    return;
+  }
 
-    if (isLeftSideHand(hand)) {
-      leftIndexY = point(hand[8]).y;
-    }
+  if (mode === "hand") {
+    drawClapRipples();
 
-    if (isRightSideHand(hand)) {
-      rightPinch = detectStrictPinch(hand);
-    }
-  });
+    let leftIndexY = null;
+    let rightPinch = false;
+    let octaveChanged = false;
 
-  if (handsList.length === 2) {
-    const [h1, h2] = handsList;
-    const now = Date.now();
+    handsList.forEach(hand => {
+      drawHand(hand);
 
-    if (detectClap(h1, h2) && now > clapCooldown) {
-      const side = getClapSide(h1, h2);
-      const c1 = palmCenter(h1);
-      const c2 = palmCenter(h2);
+      if (isLeftSideHand(hand)) leftIndexY = point(hand[8]).y;
+      if (isRightSideHand(hand)) rightPinch = detectStrictPinch(hand);
+    });
 
-      if (side === "left") {
-        updateOctave(-1);
-      } else {
-        updateOctave(1);
+    if (handsList.length === 2) {
+      const [h1, h2] = handsList;
+      const now = Date.now();
+
+      if (detectClap(h1, h2) && now > clapCooldown) {
+        const side = getClapSide(h1, h2);
+        const c1 = palmCenter(h1);
+        const c2 = palmCenter(h2);
+
+        updateOctave(side === "left" ? -1 : 1);
+        addClapRipple((c1.x + c2.x) / 2, (c1.y + c2.y) / 2);
+
+        clapCooldown = now + 900;
+        octaveChanged = true;
       }
-
-      addClapRipple(
-        (c1.x + c2.x) / 2,
-        (c1.y + c2.y) / 2
-      );
-
-      clapCooldown = now + 900;
-      octaveChanged = true;
     }
+
+    if (leftIndexY !== null) {
+      const noteIndex = yToNoteIndex(leftIndexY);
+      const note = scaleNotes[noteIndex];
+      const freq = note.freq * Math.pow(2, octaveLevel);
+
+      currentNoteName = note.name;
+      noteBox.textContent = currentNoteName;
+
+      setFrequency(freq);
+      updatePitchBar(noteIndex);
+    }
+
+    const shouldSound = playMode && leftIndexY !== null && rightPinch;
+    setSound(shouldSound);
+
+    if (handsList.length === 0) statusBox.textContent = "손을 카메라에 비춰주세요";
+    else if (octaveChanged) statusBox.textContent = "박수로 옥타브 변경됨";
+    else if (shouldSound) statusBox.textContent = `연주 중 · ${currentNoteName}`;
+    else statusBox.textContent = "오른쪽 손 엄지+검지를 완전히 붙이면 소리";
+
+    return;
   }
 
-  if (leftIndexY !== null) {
-    const noteIndex = yToNoteIndex(leftIndexY);
-    const note = scaleNotes[noteIndex];
-    const freq = note.freq * Math.pow(2, octaveLevel);
+  if (mode === "guitar") {
+    setSound(false);
 
-    currentNoteName = note.name;
-    noteBox.textContent = currentNoteName;
+    let leftHand = null;
+    let rightHand = null;
 
-    setFrequency(freq);
-    updatePitchBar(noteIndex);
-  }
+    handsList.forEach(hand => {
+      drawHand(hand);
+      if (isLeftSideHand(hand)) leftHand = hand;
+      if (isRightSideHand(hand)) rightHand = hand;
+    });
 
-  const shouldSound = playMode && leftIndexY !== null && rightPinch;
-  setSound(shouldSound);
+    if (leftHand) updateGuitarSelection(leftHand);
+    if (rightHand) {
+      handleGuitarPlay(rightHand);
+      updateAutoDial(rightHand);
+    } else {
+      playZone.classList.remove("active");
+    }
 
-  if (handsList.length === 0) {
-    statusBox.textContent = "손을 카메라에 비춰주세요";
-  } else if (octaveChanged) {
-    statusBox.textContent = "박수로 옥타브 변경됨";
-  } else if (shouldSound) {
-    statusBox.textContent = `연주 중 · ${currentNoteName}`;
-  } else if (playMode) {
-    statusBox.textContent = "오른쪽 손 엄지+검지를 완전히 붙이면 소리";
-  } else {
-    statusBox.textContent = "손동작 인식 중";
+    handleAutoPlay();
+
+    guitarStatus.textContent =
+      `기타 모드 · ${guitarChords[selectedChordIndex].name} · ${selectedStringIndex + 1}번 줄 · 자동 ${autoPlayLevel}`;
+
+    return;
   }
 }
 
 const hands = new Hands({
-  locateFile: file => {
-    return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
-  }
+  locateFile: file => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
 });
 
 hands.setOptions({
