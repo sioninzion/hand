@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Hand Sound ver 1.7</title>
+<title>손으로말해요 ver 1.8</title>
 
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
@@ -38,22 +38,26 @@ video, canvas {
 #version {
   position: absolute;
   top: 10px;
-  left: 12px;
+  right: 12px;
   z-index: 40;
   color: white;
   font-size: 12px;
   opacity: 0.9;
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: rgba(0,0,0,0.28);
+  backdrop-filter: blur(6px);
 }
 
 #homePanel {
   position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
+  left: 12px;
+  top: 12px;
+  transform: none;
   z-index: 50;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 8px;
 }
 
 .homeBtn {
@@ -61,8 +65,8 @@ video, canvas {
   background: rgba(255,255,255,0.14);
   color: white;
   border-radius: 999px;
-  padding: 14px 34px;
-  font-size: 18px;
+  padding: 9px 16px;
+  font-size: 14px;
   font-weight: bold;
   cursor: pointer;
   backdrop-filter: blur(8px);
@@ -75,7 +79,7 @@ video, canvas {
 
 #statusPanel {
   position: absolute;
-  top: 32px;
+  top: 104px;
   left: 12px;
   z-index: 30;
   color: white;
@@ -162,25 +166,17 @@ video, canvas {
 }
 
 #guitarBg {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 58%;
-  background:
-    linear-gradient(90deg, rgba(90,40,8,0.9), rgba(190,98,24,0.9), rgba(120,55,12,0.9)),
-    repeating-linear-gradient(90deg, rgba(255,255,255,0.08) 0 2px, transparent 2px 18px);
-  border-top: 1px solid rgba(255,255,255,0.2);
+  display: none;
 }
 
 #guitarNeck {
   position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 10%;
-  height: 31%;
-  background: linear-gradient(#1a0e0d, #090606);
-  box-shadow: inset 0 12px 22px rgba(255,255,255,0.07);
+  left: 8%;
+  right: 8%;
+  bottom: 16%;
+  height: 25%;
+  background: transparent;
+  box-shadow: none;
 }
 
 .guitarString {
@@ -200,10 +196,10 @@ video, canvas {
 
 #chordArea {
   position: absolute;
-  left: 11%;
-  right: 11%;
+  left: 8%;
+  right: 8%;
   bottom: 8%;
-  height: 38%;
+  height: 34%;
   display: flex;
   gap: 8px;
 }
@@ -215,9 +211,10 @@ video, canvas {
   font-size: 20px;
   text-align: center;
   padding-top: 12px;
-  background: rgba(210,130,65,0.42);
-  border: 1px solid rgba(255,255,255,0.12);
-  clip-path: polygon(50% 0, 100% 8%, 100% 92%, 50% 100%, 0 92%, 0 8%);
+  background: rgba(0,0,0,0.28);
+  border: 1px solid rgba(255,255,255,0.32);
+  border-radius: 18px;
+  backdrop-filter: blur(5px);
 }
 
 .chordPad.active {
@@ -276,7 +273,7 @@ video, canvas {
 
 #guitarStatus {
   position: absolute;
-  top: 32px;
+  top: 104px;
   left: 12px;
   color: white;
   font-size: 12px;
@@ -302,8 +299,8 @@ video, canvas {
   #noteBox { top: calc(50% - 40px); }
 
   .homeBtn {
-    padding: 12px 30px;
-    font-size: 16px;
+    padding: 8px 14px;
+    font-size: 13px;
   }
 
   .chordPad {
@@ -344,7 +341,7 @@ video, canvas {
 
   <canvas id="canvas"></canvas>
 
-  <div id="version">ver 1.7</div>
+  <div id="version">손으로말해요 · ver 1.8</div>
 
   <div id="statusPanel">
     <div id="status">손을 카메라에 비춰주세요</div>
@@ -441,6 +438,20 @@ let autoPlayLevel = 0;
 let autoTimer = 0;
 let autoLastTime = 0;
 
+// ver 1.8: 손가락 인식 안정화용 상태값
+let smoothLeftIndexY = null;
+let pinchStableFrames = 0;
+let lastLeftIndexY = null;
+let lastLeftSeenTime = 0;
+let pendingChordIndex = null;
+let pendingChordFrames = 0;
+let pendingStringIndex = null;
+let pendingStringFrames = 0;
+const SMOOTHING = 0.68;
+const PINCH_REQUIRED_FRAMES = 2;
+const SELECT_REQUIRED_FRAMES = 2;
+const LOST_HAND_GRACE_MS = 180;
+
 function buildPitchBar() {
   pitchBar.innerHTML = "";
   scaleNotes.forEach((note, index) => {
@@ -500,6 +511,10 @@ function setMode(nextMode) {
 
   playMode = handVisible;
   setSound(false);
+  if (mode === "home") {
+    smoothLeftIndexY = null;
+    pinchStableFrames = 0;
+  }
 }
 
 handBtn.addEventListener("click", async () => {
@@ -530,6 +545,23 @@ function dist(a, b) {
   const dx = a.x - b.x;
   const dy = a.y - b.y;
   return Math.sqrt(dx * dx + dy * dy);
+}
+
+function lerp(prev, next, amount) {
+  if (prev === null || Number.isNaN(prev)) return next;
+  return prev * amount + next * (1 - amount);
+}
+
+function stableSetCandidate(value, current, pending, frames) {
+  if (value === current) return { current, pending: null, frames: 0 };
+  if (pending === value) frames += 1;
+  else { pending = value; frames = 1; }
+  if (frames >= SELECT_REQUIRED_FRAMES) {
+    current = value;
+    pending = null;
+    frames = 0;
+  }
+  return { current, pending, frames };
 }
 
 function drawPoint(p, r = 7) {
@@ -679,7 +711,7 @@ function detectStrictPinch(landmarks) {
   const thumbTip = point(landmarks[4]);
   const indexTip = point(landmarks[8]);
   const handSizeValue = Math.max(dist(point(landmarks[0]), point(landmarks[5])), 1);
-  return dist(thumbTip, indexTip) < handSizeValue * 0.42;
+  return dist(thumbTip, indexTip) < handSizeValue * 0.34;
 }
 
 function isLeftSideHand(landmarks) {
@@ -726,12 +758,20 @@ function updateGuitarSelection(leftHand) {
 
   if (inRect(p, area, 12)) {
     const localX = Math.min(Math.max(p.x - area.left, 0), area.width);
-    selectedChordIndex = Math.min(guitarChords.length - 1, Math.floor(localX / (area.width / guitarChords.length)));
+    const chordCandidate = Math.min(guitarChords.length - 1, Math.floor(localX / (area.width / guitarChords.length)));
+    const stable = stableSetCandidate(chordCandidate, selectedChordIndex, pendingChordIndex, pendingChordFrames);
+    selectedChordIndex = stable.current;
+    pendingChordIndex = stable.pending;
+    pendingChordFrames = stable.frames;
   }
 
   if (inRect(p, neck, 28)) {
     const localY = Math.min(Math.max(p.y - neck.top, 0), neck.height);
-    selectedStringIndex = Math.min(5, Math.max(0, Math.round((localY / neck.height) * 5)));
+    const stringCandidate = Math.min(5, Math.max(0, Math.round((localY / neck.height) * 5)));
+    const stable = stableSetCandidate(stringCandidate, selectedStringIndex, pendingStringIndex, pendingStringFrames);
+    selectedStringIndex = stable.current;
+    pendingStringIndex = stable.pending;
+    pendingStringFrames = stable.frames;
   }
 
   document.querySelectorAll(".chordPad").forEach((pad, index) => {
@@ -812,9 +852,26 @@ function onResults(results) {
     handsList.forEach(hand => {
       drawHand(hand);
 
-      if (isLeftSideHand(hand)) leftIndexY = point(hand[8]).y;
-      if (isRightSideHand(hand)) rightPinch = detectStrictPinch(hand);
+      if (isLeftSideHand(hand)) {
+        const rawY = point(hand[8]).y;
+        smoothLeftIndexY = lerp(smoothLeftIndexY, rawY, SMOOTHING);
+        leftIndexY = smoothLeftIndexY;
+        lastLeftIndexY = smoothLeftIndexY;
+        lastLeftSeenTime = Date.now();
+      }
+
+      if (isRightSideHand(hand) && detectStrictPinch(hand)) {
+        rightPinch = true;
+      }
     });
+
+    if (leftIndexY === null && lastLeftIndexY !== null && Date.now() - lastLeftSeenTime < LOST_HAND_GRACE_MS) {
+      leftIndexY = lastLeftIndexY;
+    }
+
+    if (rightPinch) pinchStableFrames += 1;
+    else pinchStableFrames = 0;
+    rightPinch = pinchStableFrames >= PINCH_REQUIRED_FRAMES;
 
     if (handsList.length === 2) {
       const [h1, h2] = handsList;
