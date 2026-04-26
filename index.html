@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>손으로말해요 ver 1.8</title>
+<title>손으로말해요 ver 1.9</title>
 
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
@@ -341,7 +341,7 @@ video, canvas {
 
   <canvas id="canvas"></canvas>
 
-  <div id="version">손으로말해요 · ver 1.8</div>
+  <div id="version">손으로말해요 · ver 1.9</div>
 
   <div id="statusPanel">
     <div id="status">손을 카메라에 비춰주세요</div>
@@ -564,24 +564,70 @@ function stableSetCandidate(value, current, pending, frames) {
   return { current, pending, frames };
 }
 
-function drawPoint(p, r = 7) {
+function drawPoint(p, r = 7, color = "rgba(0,255,100,0.9)", fill = "white") {
   ctx.beginPath();
   ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
-  ctx.fillStyle = "white";
+  ctx.fillStyle = fill;
   ctx.fill();
   ctx.lineWidth = 2;
-  ctx.strokeStyle = "rgba(0,255,100,0.9)";
+  ctx.strokeStyle = color;
   ctx.stroke();
 }
 
-function drawLine(a, b) {
+function drawLine(a, b, color = "rgba(0,255,100,0.9)", width = 4) {
   ctx.beginPath();
   ctx.moveTo(a.x, a.y);
   ctx.lineTo(b.x, b.y);
-  ctx.lineWidth = 4;
+  ctx.lineWidth = width;
   ctx.lineCap = "round";
-  ctx.strokeStyle = "rgba(0,255,100,0.9)";
+  ctx.strokeStyle = color;
   ctx.stroke();
+}
+
+function normalizeHandLabel(rawLabel) {
+  // MediaPipe handedness는 셀피처럼 좌우 반전된 입력을 기준으로 잡는 경우가 있어,
+  // 현재처럼 화면만 CSS로 뒤집고 원본 프레임을 분석할 때 실제 사용자 손 기준으로 한 번 뒤집어 준다.
+  if (rawLabel === "Left") return "Right";
+  if (rawLabel === "Right") return "Left";
+  return null;
+}
+
+function getHandLabel(handednessItem, landmarks) {
+  const raw = handednessItem?.label || handednessItem?.classification?.[0]?.label || null;
+  const normalized = normalizeHandLabel(raw);
+  if (normalized) return normalized;
+  return screenX(landmarks) < canvas.width * 0.5 ? "Left" : "Right";
+}
+
+function isPalmFacingCamera(landmarks, handLabel) {
+  const wrist = landmarks[0];
+  const indexBase = landmarks[5];
+  const pinkyBase = landmarks[17];
+
+  const ax = indexBase.x - wrist.x;
+  const ay = indexBase.y - wrist.y;
+  const bx = pinkyBase.x - wrist.x;
+  const by = pinkyBase.y - wrist.y;
+  const cross = ax * by - ay * bx;
+
+  return handLabel === "Left" ? cross > 0 : cross < 0;
+}
+
+function getHandColor(landmarks, handLabel) {
+  const palm = isPalmFacingCamera(landmarks, handLabel);
+  if (handLabel === "Left") return palm ? "rgba(0,255,120,0.95)" : "rgba(70,145,255,0.95)";
+  return palm ? "rgba(255,165,40,0.95)" : "rgba(255,50,50,0.95)";
+}
+
+function fingertipVisualPoint(landmarks, tipId, prevId) {
+  const tip = point(landmarks[tipId]);
+  const prev = point(landmarks[prevId]);
+  const dx = tip.x - prev.x;
+  const dy = tip.y - prev.y;
+  return {
+    x: tip.x + dx * 0.38,
+    y: tip.y + dy * 0.38
+  };
 }
 
 function palmCenter(landmarks) {
@@ -598,19 +644,35 @@ function handSize(landmarks) {
   return Math.max(dist(point(landmarks[0]), point(landmarks[9])), 1);
 }
 
-function drawHand(landmarks) {
-  const wrist = point(landmarks[0]);
+function drawHand(landmarks, color = "rgba(0,255,100,0.9)") {
+  const fingers = [
+    [0, 1, 2, 3, 4],
+    [0, 5, 6, 7, 8],
+    [0, 9, 10, 11, 12],
+    [0, 13, 14, 15, 16],
+    [0, 17, 18, 19, 20]
+  ];
 
-  for (let i = 0; i < 5; i++) {
-    const base = point(landmarks[baseJointIds[i]]);
-    const tip = point(landmarks[fingertipIds[i]]);
-    drawLine(wrist, base);
-    drawLine(base, tip);
-    drawPoint(base, 6);
-    drawPoint(tip, 7);
+  fingers.forEach(finger => {
+    for (let i = 0; i < finger.length - 1; i++) {
+      drawLine(point(landmarks[finger[i]]), point(landmarks[finger[i + 1]]), color, 3.5);
+    }
+  });
+
+  [0, 5, 9, 13, 17, 0].forEach((id, i, arr) => {
+    if (i < arr.length - 1) drawLine(point(landmarks[id]), point(landmarks[arr[i + 1]]), color, 2.3);
+  });
+
+  const fingertipPrev = { 4: 3, 8: 7, 12: 11, 16: 15, 20: 19 };
+  for (let i = 0; i <= 20; i++) {
+    if (fingertipPrev[i]) continue;
+    drawPoint(point(landmarks[i]), i === 0 ? 5.8 : 4.2, color, "rgba(255,255,255,0.86)");
   }
 
-  drawPoint(wrist, 7);
+  Object.entries(fingertipPrev).forEach(([tipId, prevId]) => {
+    const visualTip = fingertipVisualPoint(landmarks, Number(tipId), prevId);
+    drawPoint(visualTip, Number(tipId) === 8 ? 9 : 7, color, "rgba(255,255,255,0.97)");
+  });
 }
 
 function addClapRipple(x, y) {
@@ -714,11 +776,13 @@ function detectStrictPinch(landmarks) {
   return dist(thumbTip, indexTip) < handSizeValue * 0.34;
 }
 
-function isLeftSideHand(landmarks) {
+function isLeftSideHand(landmarks, handLabel = null) {
+  if (handLabel) return handLabel === "Left";
   return screenX(landmarks) < canvas.width * 0.5;
 }
 
-function isRightSideHand(landmarks) {
+function isRightSideHand(landmarks, handLabel = null) {
+  if (handLabel) return handLabel === "Right";
   return screenX(landmarks) >= canvas.width * 0.5;
 }
 
@@ -836,6 +900,7 @@ function onResults(results) {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
   const handsList = results.multiHandLandmarks || [];
+  const handednessList = results.multiHandedness || [];
 
   if (mode === "home") {
     setSound(false);
@@ -849,10 +914,12 @@ function onResults(results) {
     let rightPinch = false;
     let octaveChanged = false;
 
-    handsList.forEach(hand => {
-      drawHand(hand);
+    handsList.forEach((hand, i) => {
+      const handLabel = getHandLabel(handednessList[i], hand);
+      const handColor = getHandColor(hand, handLabel);
+      drawHand(hand, handColor);
 
-      if (isLeftSideHand(hand)) {
+      if (isLeftSideHand(hand, handLabel)) {
         const rawY = point(hand[8]).y;
         smoothLeftIndexY = lerp(smoothLeftIndexY, rawY, SMOOTHING);
         leftIndexY = smoothLeftIndexY;
@@ -860,7 +927,7 @@ function onResults(results) {
         lastLeftSeenTime = Date.now();
       }
 
-      if (isRightSideHand(hand) && detectStrictPinch(hand)) {
+      if (isRightSideHand(hand, handLabel) && detectStrictPinch(hand)) {
         rightPinch = true;
       }
     });
@@ -919,10 +986,12 @@ function onResults(results) {
     let leftHand = null;
     let rightHand = null;
 
-    handsList.forEach(hand => {
-      drawHand(hand);
-      if (isLeftSideHand(hand)) leftHand = hand;
-      if (isRightSideHand(hand)) rightHand = hand;
+    handsList.forEach((hand, i) => {
+      const handLabel = getHandLabel(handednessList[i], hand);
+      const handColor = getHandColor(hand, handLabel);
+      drawHand(hand, handColor);
+      if (isLeftSideHand(hand, handLabel)) leftHand = hand;
+      if (isRightSideHand(hand, handLabel)) rightHand = hand;
     });
 
     if (leftHand) updateGuitarSelection(leftHand);
