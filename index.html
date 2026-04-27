@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>손으로말해요 ver 2.0</title>
+<title>손으로말해요 ver 2.1</title>
 
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
@@ -245,10 +245,10 @@ video, canvas {
 
 #autoDial {
   position: absolute;
-  top: 10%;
+  top: 24%;
   right: 18%;
-  width: 92px;
-  height: 92px;
+  width: 104px;
+  height: 104px;
   border-radius: 50%;
   background: rgba(0,0,0,0.42);
   border: 2px solid rgba(255,255,255,0.5);
@@ -257,18 +257,57 @@ video, canvas {
   display: flex;
   align-items: center;
   justify-content: center;
+  text-align: center;
+  box-shadow: 0 0 16px rgba(255,255,255,0.16);
 }
 
 #autoDial::after {
   content: "";
   position: absolute;
   width: 6px;
-  height: 26px;
+  height: 31px;
   border-radius: 999px;
-  background: rgba(255,255,255,0.9);
+  background: rgba(255,255,255,0.92);
   top: 8px;
-  transform-origin: 3px 38px;
+  left: 50%;
+  margin-left: -3px;
+  transform-origin: 3px 44px;
   transform: rotate(var(--dial-rot, 0deg));
+  box-shadow: 0 0 10px rgba(255,255,255,0.55);
+}
+
+.dialDot {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 5px;
+  height: 5px;
+  margin-left: -2.5px;
+  margin-top: -2.5px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.34);
+  transform: rotate(var(--dot-rot)) translateY(-45px);
+  box-shadow: 0 0 4px rgba(255,255,255,0.18);
+}
+
+.dialDot.playDot {
+  width: 7px;
+  height: 7px;
+  margin-left: -3.5px;
+  margin-top: -3.5px;
+  background: rgba(120,210,255,0.58);
+}
+
+.dialDot.active {
+  background: rgba(255,255,255,0.98);
+  box-shadow: 0 0 10px rgba(255,255,255,0.95), 0 0 16px rgba(90,190,255,0.75);
+}
+
+#autoDialLabel {
+  position: relative;
+  z-index: 2;
+  line-height: 1.25;
+  text-shadow: 0 0 8px rgba(0,0,0,0.75);
 }
 
 #guitarStatus {
@@ -314,9 +353,20 @@ video, canvas {
   }
 
   #autoDial {
-    width: 74px;
-    height: 74px;
+    top: 25%;
+    width: 84px;
+    height: 84px;
     right: 20%;
+  }
+
+  #autoDial::after {
+    height: 25px;
+    top: 7px;
+    transform-origin: 3px 35px;
+  }
+
+  .dialDot {
+    transform: rotate(var(--dot-rot)) translateY(-36px);
   }
 }
 </style>
@@ -334,14 +384,14 @@ video, canvas {
     <div id="guitarBg"></div>
     <div id="guitarNeck"></div>
     <div id="chordArea"></div>
-    <div id="autoDial">자동<br>재생</div>
+    <div id="autoDial"><span id="autoDialLabel">자동<br><small>꺼짐</small></span></div>
     <div id="playZone">PLAY</div>
     <div id="guitarStatus">기타 모드</div>
   </div>
 
   <canvas id="canvas"></canvas>
 
-  <div id="version">손으로말해요 · ver 2.0</div>
+  <div id="version">손으로말해요 · ver 2.1</div>
 
   <div id="statusPanel">
     <div id="status">손을 카메라에 비춰주세요</div>
@@ -372,6 +422,7 @@ const guitarNeck = document.getElementById("guitarNeck");
 const chordArea = document.getElementById("chordArea");
 const playZone = document.getElementById("playZone");
 const autoDial = document.getElementById("autoDial");
+const autoDialLabel = document.getElementById("autoDialLabel");
 const guitarStatus = document.getElementById("guitarStatus");
 
 const fingertipIds = [4, 8, 12, 16, 20];
@@ -484,8 +535,20 @@ function buildGuitarUI() {
   });
 }
 
+function buildAutoDialDots() {
+  autoDial.querySelectorAll(".dialDot").forEach(dot => dot.remove());
+  for (let i = 0; i <= 10; i++) {
+    const dot = document.createElement("div");
+    dot.className = `dialDot ${i >= 7 ? "playDot" : ""}`;
+    dot.dataset.level = i;
+    dot.style.setProperty("--dot-rot", `${i * 32}deg`);
+    autoDial.appendChild(dot);
+  }
+}
+
 buildPitchBar();
 buildGuitarUI();
+buildAutoDialDots();
 
 function resizeCanvas() {
   const rect = canvas.getBoundingClientRect();
@@ -519,6 +582,8 @@ function setMode(nextMode) {
     smoothLeftIndexY = null;
     pinchStableFrames = 0;
   }
+
+  updateGuitarModeVisual();
 }
 
 handBtn.addEventListener("click", async () => {
@@ -784,10 +849,22 @@ function playGuitarString() {
   playGuitarNote(freq);
 }
 
-function playGuitarChord() {
+function playGuitarChord(step = 7) {
   const chord = guitarChords[selectedChordIndex];
-  chord.notes.forEach((freq, i) => {
-    setTimeout(() => playGuitarNote(freq), i * 28);
+  let pattern;
+
+  if (step <= 7) {
+    pattern = [0, 1, 2, 3, 4, 5].map((stringIndex, i) => ({ stringIndex, delay: i * 70 }));
+  } else if (step === 8) {
+    pattern = [0, 2, 4, 5, 4, 2].map((stringIndex, i) => ({ stringIndex, delay: i * 54 }));
+  } else if (step === 9) {
+    pattern = [0, 1, 2, 3, 4, 5, 5, 4, 3, 2].map((stringIndex, i) => ({ stringIndex, delay: i < 6 ? i * 32 : 190 + (i - 6) * 34 }));
+  } else {
+    pattern = [0, 2, 4, 5, 3, 1, 0, 3, 5, 4, 2, 1].map((stringIndex, i) => ({ stringIndex, delay: i * 35 }));
+  }
+
+  pattern.forEach(({ stringIndex, delay }) => {
+    setTimeout(() => playGuitarNote(chord.notes[stringIndex] || chord.notes[0]), delay);
   });
 }
 
@@ -795,8 +872,22 @@ function isChordAutoMode() {
   return autoPlayLevel >= 7;
 }
 
+function getAutoLevelText() {
+  if (autoPlayLevel === 0) return "꺼짐";
+  if (autoPlayLevel < 7) return `${autoPlayLevel}단계<br>줄 반복`;
+  if (autoPlayLevel === 7) return "7단계<br>느린 연주";
+  if (autoPlayLevel === 8) return "8단계<br>아르페지오";
+  if (autoPlayLevel === 9) return "9단계<br>스트럼";
+  return "10단계<br>리듬 연주";
+}
+
 function updateGuitarModeVisual() {
   guitarUI.classList.toggle("chordMode", isChordAutoMode());
+  autoDial.style.setProperty("--dial-rot", `${autoPlayLevel * 32}deg`);
+  autoDial.querySelectorAll(".dialDot").forEach(dot => {
+    dot.classList.toggle("active", Number(dot.dataset.level) === autoPlayLevel);
+  });
+  autoDialLabel.innerHTML = `자동<br><small>${getAutoLevelText()}</small>`;
 }
 
 function yToNoteIndex(y) {
@@ -905,11 +996,10 @@ function updateAutoDial(rightHand) {
     let deg = ang * 180 / Math.PI + 90;
     if (deg < 0) deg += 360;
 
-    // 0~10단계. 1~6은 선택한 줄 반복, 7~10은 선택한 코드 전체 연주.
+    // 0~10단계. 1~6은 선택한 줄 반복, 7~10은 코드 기반 리듬/아르페지오 연주.
     if (deg > 335 || deg < 15) autoPlayLevel = 0;
     else autoPlayLevel = Math.max(1, Math.min(10, Math.round(deg / 32)));
 
-    autoDial.style.setProperty("--dial-rot", `${autoPlayLevel * 32}deg`);
     updateGuitarModeVisual();
   }
 }
@@ -932,10 +1022,10 @@ function handleAutoPlay() {
   if (autoPlayLevel <= 0) return;
 
   const now = Date.now();
-  const intervals = [0, 1050, 880, 720, 560, 420, 300, 1150, 900, 680, 480];
+  const intervals = [0, 1050, 880, 720, 560, 420, 300, 1320, 980, 760, 620];
 
   if (now - autoLastTime > intervals[autoPlayLevel]) {
-    if (isChordAutoMode()) playGuitarChord();
+    if (isChordAutoMode()) playGuitarChord(autoPlayLevel);
     else playGuitarString();
     autoLastTime = now;
   }
@@ -1068,6 +1158,7 @@ hands.setOptions({
 });
 
 hands.onResults(onResults);
+updateGuitarModeVisual();
 
 const camera = new Camera(video, {
   onFrame: async () => {
