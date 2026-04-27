@@ -112,8 +112,7 @@ canvas { transform: none; }
 }
 
 .noteCell {
-  flex: 1 1 0;
-  min-height: 0;
+  height: calc(100% / 23);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -123,8 +122,8 @@ canvas { transform: none; }
   border-bottom: 1px solid rgba(90,90,90,0.45);
 }
 
-.noteCell.white { background: #fff; color: #111; flex: 1 1 0; }
-.noteCell.black { background: #050505; color: #fff; flex: 0.8 1 0; }
+.noteCell.white { background: #fff; color: #111; }
+.noteCell.black { background: #050505; color: #fff; }
 
 .noteCell.active {
   background: var(--active-color, #ff2626) !important;
@@ -1034,15 +1033,7 @@ function yToNoteIndex(y) {
   const bottom = stage.height * 0.90;
   const clamped = Math.min(Math.max(y, top), bottom);
   const local = (clamped - top) / (bottom - top);
-  const weights = scaleNotes.map(note => note.black ? 0.8 : 1);
-  const total = weights.reduce((sum, value) => sum + value, 0);
-  let acc = 0;
-  const target = local * total;
-  for (let i = 0; i < weights.length; i++) {
-    acc += weights[i];
-    if (target <= acc) return i;
-  }
-  return scaleNotes.length - 1;
+  return Math.round(local * (scaleNotes.length - 1));
 }
 
 function updatePitchBar(noteIndex) {
